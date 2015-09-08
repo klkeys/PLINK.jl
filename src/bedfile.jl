@@ -12,12 +12,12 @@
 type BEDFile
 	x   :: DenseArray{Int8,1}	# compressed genotypes for genotype matrix X
 	xt  :: DenseArray{Int8,1}	# compressed genotypes for TRANSPOSED genotype matrix X'
-	n   :: Integer             	# number of cases (people) in uncompressed genotype matrix 
-	p   :: Integer             	# number of predictors (SNPs) in uncompressed genotype matrix
-	blocksize  :: Integer     	# number of bytes per compressed column of genotype matrix
-	tblocksize :: Integer    	# number of bytes per compressed column of TRANSPOSED genotype matrix
+	n   :: Int             	# number of cases (people) in uncompressed genotype matrix 
+	p   :: Int             	# number of predictors (SNPs) in uncompressed genotype matrix
+	blocksize  :: Int     	# number of bytes per compressed column of genotype matrix
+	tblocksize :: Int    	# number of bytes per compressed column of TRANSPOSED genotype matrix
 	x2  :: DenseArray			# nongenetic covariantes, if any exist
-	p2  :: Integer				# number of nongenetic covariates
+	p2  :: Int				# number of nongenetic covariates
 	x2t :: DenseArray			# transpose of nongenetic covariantes, used in matrix algebra 
 
 	BEDFile(x,xt,n,p,blocksize,tblocksize,x2,p2,x2t) = new(x,xt,n,p,blocksize,tblocksize,x2,p2,x2t)
@@ -29,10 +29,10 @@ function BEDFile(
 	T          :: Type,
 	filename   :: ASCIIString, 
 	tfilename  :: ASCIIString, 
-	n          :: Integer, 
-	p          :: Integer, 
-	blocksize  :: Integer, 
-	tblocksize :: Integer, 
+	n          :: Int, 
+	p          :: Int, 
+	blocksize  :: Int, 
+	tblocksize :: Int, 
 	x2filename :: ASCIIString
 )
 	x     = BEDFile{T}(read_bedfile(filename),read_bedfile(tfilename),n,p,blocksize,tblocksize,SharedArray(T,n,0),0)
@@ -45,14 +45,14 @@ function BEDFile(
 end
 
 # for previous constructor, if type is not defined then default to Float64
-BEDFile(filename::ASCIIString, tfilename::ASCIIString, n::Integer, p::Integer, blocksize::Integer, tblocksize::Integer, x2filename::ASCIIString) = BEDFile(Float64, filename, tfilename, n, p, blocksize, tblocksize, x2filename)
+BEDFile(filename::ASCIIString, tfilename::ASCIIString, n::Int, p::Int, blocksize::Int, tblocksize::Int, x2filename::ASCIIString) = BEDFile(Float64, filename, tfilename, n, p, blocksize, tblocksize, x2filename)
 
 function BEDFile(
 	T          :: Type, 
 	filename   :: ASCIIString, 
 	tfilename  :: ASCIIString, 
-	n          :: Integer, 
-	p          :: Integer, 
+	n          :: Int, 
+	p          :: Int, 
 	x2filename :: ASCIIString
 )
 	x     = BEDFile(read_bedfile(filename),read_bedfile(tfilename),n,p,((n-1)>>>2)+1,((p-1)>>>2)+1,SharedArray(T,n,0),0)
@@ -65,7 +65,7 @@ function BEDFile(
 end
 
 # set default type for previous constructor to Float64
-BEDFile(filename::ASCIIString, tfilename::ASCIIString, n::Integer, p::Integer, x2filename::ASCIIString) = BEDFile(Float64, filename, tfilename, n, p, xtfilename)
+BEDFile(filename::ASCIIString, tfilename::ASCIIString, n::Int, p::Int, x2filename::ASCIIString) = BEDFile(Float64, filename, tfilename, n, p, xtfilename)
 
 # a more complicated constructor that attempts to infer n, p, and blocksize based on the BED filepath
 # it assumes that the BED, FAM, and BIM files are all in the same directory
@@ -275,13 +275,13 @@ function subset_genotype_matrix(
 	x         :: DenseArray{Int8,1}, 
 	rowidx    :: BitArray{1}, 
 	colidx    :: BitArray{1}, 
-	n         :: Integer, 
-	p         :: Integer, 
-	blocksize :: Integer; 
-	yn        :: Integer = sum(rowidx), 
-	yp        :: Integer = sum(colidx), 
-	yblock    :: Integer = ((yn-1) >>> 2) + 1, 
-	ytblock   :: Integer = ((yp-1) >>> 2) + 1
+	n         :: Int, 
+	p         :: Int, 
+	blocksize :: Int; 
+	yn        :: Int = sum(rowidx), 
+	yp        :: Int = sum(colidx), 
+	yblock    :: Int = ((yn-1) >>> 2) + 1, 
+	ytblock   :: Int = ((yp-1) >>> 2) + 1
 )
 
 	quiet = true 
@@ -381,13 +381,13 @@ function subset_genotype_matrix(
 	x         :: DenseArray{Int8,1}, 
 	rowidx    :: UnitRange{Int}, 
 	colidx    :: BitArray{1}, 
-	n         :: Integer, 
-	p         :: Integer, 
-	blocksize :: Integer; 
-	yn        :: Integer = sum(rowidx), 
-	yp        :: Integer = sum(colidx), 
-	yblock    :: Integer = ((yn-1) >>> 2) + 1, 
-	ytblock   :: Integer = ((yp-1) >>> 2) + 1
+	n         :: Int, 
+	p         :: Int, 
+	blocksize :: Int; 
+	yn        :: Int = sum(rowidx), 
+	yp        :: Int = sum(colidx), 
+	yblock    :: Int = ((yn-1) >>> 2) + 1, 
+	ytblock   :: Int = ((yp-1) >>> 2) + 1
 )
 
 	quiet = true 
@@ -479,13 +479,13 @@ function subset_genotype_matrix(
 	x         :: DenseArray{Int8,1}, 
 	rowidx    :: BitArray{1}, 
 	colidx    :: UnitRange{Int}, 
-	n         :: Integer, 
-	p         :: Integer, 
-	blocksize :: Integer; 
-	yn        :: Integer = sum(rowidx), 
-	yp        :: Integer = sum(colidx), 
-	yblock    :: Integer = ((yn-1) >>> 2) + 1, 
-	ytblock   :: Integer = ((yp-1) >>> 2) + 1
+	n         :: Int, 
+	p         :: Int, 
+	blocksize :: Int; 
+	yn        :: Int = sum(rowidx), 
+	yp        :: Int = sum(colidx), 
+	yblock    :: Int = ((yn-1) >>> 2) + 1, 
+	ytblock   :: Int = ((yp-1) >>> 2) + 1
 )
 
 	quiet = true 
@@ -581,13 +581,13 @@ function subset_genotype_matrix(
 	x         :: DenseArray{Int8,1}, 
 	rowidx    :: UnitRange{Int}, 
 	colidx    :: UnitRange{Int}, 
-	n         :: Integer, 
-	p         :: Integer, 
-	blocksize :: Integer; 
-	yn        :: Integer = sum(rowidx), 
-	yp        :: Integer = sum(colidx), 
-	yblock    :: Integer = ((yn-1) >>> 2) + 1, 
-	ytblock   :: Integer = ((yp-1) >>> 2) + 1
+	n         :: Int, 
+	p         :: Int, 
+	blocksize :: Int; 
+	yn        :: Int = sum(rowidx), 
+	yp        :: Int = sum(colidx), 
+	yblock    :: Int = ((yn-1) >>> 2) + 1, 
+	ytblock   :: Int = ((yp-1) >>> 2) + 1
 )
 
 	quiet = true 

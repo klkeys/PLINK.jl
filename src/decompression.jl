@@ -30,16 +30,17 @@
 function getindex(
 	X         :: BEDFile, 
 	x         :: DenseArray{Int8,1}, 
-	row       :: Integer, 
-	col       :: Integer, 
-	blocksize :: Integer; 
-	interpret :: Bool = true
+	row       :: Int, 
+	col       :: Int, 
+	blocksize :: Int; 
+	interpret :: Bool = true,
+	float32   :: Bool = false
 )
 	if col <= X.p
 		genotype_block = x[(col-1)*blocksize + ((row - 1) >>> 2) + 1]
 		k = 2*((row-1) & 3) 
 		genotype = (genotype_block >>> k) & THREE8
-        interpret && typeof(X.x2) == Float32 && return geno32[genotype + ONE8] 
+        interpret && float32 && return geno32[genotype + ONE8] 
         interpret && return geno64[genotype + ONE8] 
 		return genotype
 	else
@@ -54,11 +55,11 @@ function getindex(x::BEDFile, rowidx::BitArray{1}, colidx::BitArray{1})
 	yblock  = ((yn-1) >>> 2) + 1
 	ytblock = ((yp-1) >>> 2) + 1
 
-	y  = subset_genotype_matrix(x, x.x, rowidx, colidx, x.n, x.p, x.blocksize, yn=yn, yp=yp, yblock=yblock, ytblock=ytblock) 
-	yt = subset_genotype_matrix(x, x.xt, colidx, rowidx, x.p, x.n, x.tblocksize, yn=yp, yp=yn, yblock=ytblock, ytblock=yblock) 
-	y2 = x.x2[rowidx,colidx]
+	y   = subset_genotype_matrix(x, x.x, rowidx, colidx, x.n, x.p, x.blocksize, yn=yn, yp=yp, yblock=yblock, ytblock=ytblock) 
+	yt  = subset_genotype_matrix(x, x.xt, colidx, rowidx, x.p, x.n, x.tblocksize, yn=yp, yp=yn, yblock=ytblock, ytblock=yblock) 
+	y2  = x.x2[rowidx,colidx]
 	y2t = y2'
-	p2 = size(y2,2)
+	p2  = size(y2,2)
 
 	return BEDFile(y,yt,yn,yp,yblock,ytblock,y2,p2,y2')
 end
@@ -133,7 +134,7 @@ end
 function decompress_genotypes!(
 	y       :: DenseArray{Float64,1}, 
 	x       :: BEDFile, 
-	snp     :: Integer, 
+	snp     :: Int, 
 	means   :: DenseArray{Float64,1}, 
 	invstds :: DenseArray{Float64,1}
 )
@@ -157,7 +158,7 @@ end
 function decompress_genotypes!(
 	y       :: DenseArray{Float32,1}, 
 	x       :: BEDFile, 
-	snp     :: Integer, 
+	snp     :: Int, 
 	means   :: DenseArray{Float32,1}, 
 	invstds :: DenseArray{Float32,1}
 )
@@ -166,8 +167,8 @@ function decompress_genotypes!(
 	t = zero(Float32)
 	if snp <= x.p
 		@inbounds for case = 1:x.n
-			t       = getindex(x,x.x,case,snp,x.blocksize) 
-			y[case] = ifelse(isnan(t), 0.0, (t - m)*d)
+			t       = getindex(x,x.x,case,snp,x.blocksize, float32=true) 
+			y[case] = ifelse(isnan(t), 0.0f0, (t - m)*d)
 		end
 	else
 		@inbounds for case = 1:x.n
@@ -190,7 +191,7 @@ end
 # klkeys@g.ucla.edu
 function decompress_genotypes(
 	x       :: BEDFile, 
-	snp     :: Integer, 
+	snp     :: Int, 
 	means   :: DenseArray{Float64,1}, 
 	invstds :: DenseArray{Float64,1}; 
 	shared  :: Bool = true
@@ -203,12 +204,12 @@ end
 
 function decompress_genotypes(
 	x       :: BEDFile, 
-	snp     :: Integer, 
+	snp     :: Int, 
 	means   :: DenseArray{Float32,1}, 
 	invstds :: DenseArray{Float32,1}; 
 	shared  :: Bool = true
 )
-	y = ifelse(shared, SharedArray(Float32, x.n, init = S -> S[localindexes(S)] = 0.0), zeros(Float32,x.n))
+	y = ifelse(shared, SharedArray(Float32, x.n, init = S -> S[localindexes(S)] = 0.0f0), zeros(Float32,x.n))
 	decompress_genotypes!(y,x,snp,means,invstds)
 	return y 
 end
@@ -236,7 +237,7 @@ function decompress_genotypes!(
 	x       :: BEDFile; 
 	y       :: DenseArray{Float64,1} = SharedArray(Float64, x.n), 
 	means   :: DenseArray{Float64,1} = mean(Float64,x), 
-	invstds :: DenseArray{Float64,1} = invstd(Float64,x, y=means)
+	invstds :: DenseArray{Float64,1} = invstd(x,means)
 ) 
 
 	# extract size of Y
@@ -262,7 +263,7 @@ function decompress_genotypes!(
 	x       :: BEDFile; 
 	y       :: DenseArray{Float32,1} = SharedArray(Float32, x.n), 
 	means   :: DenseArray{Float32,1} = mean(Float32,x), 
-	invstds :: DenseArray{Float32,1} = invstd(Float32,x, y=means)
+	invstds :: DenseArray{Float32,1} = invstd(x,means)
 ) 
 
 	# extract size of Y
@@ -305,7 +306,7 @@ function decompress_genotypes!(
 	x       :: BEDFile, 
 	indices :: BitArray{1}; 
 	means   :: DenseArray{Float64,1} = mean(Float64,x),
-	invstds :: DenseArray{Float64,1} = invstd(Float64,x, y=means)
+	invstds :: DenseArray{Float64,1} = invstd(x,means)
 )
 
 	# get dimensions of matrix to fill 
@@ -359,7 +360,7 @@ function decompress_genotypes!(
 	x       :: BEDFile, 
 	indices :: BitArray{1}; 
 	means   :: DenseArray{Float32,1} = mean(Float32,x),
-	invstds :: DenseArray{Float32,1} = invstd(Float32,x, y=means)
+	invstds :: DenseArray{Float32,1} = invstd(x,means)
 )
 
 	# get dimensions of matrix to fill 
@@ -390,7 +391,7 @@ function decompress_genotypes!(
 				d = invstds[snp]
 
 				@inbounds for case = 1:n
-					t = getindex(x,x.x,case,snp,x.blocksize)
+					t = getindex(x,x.x,case,snp,x.blocksize, float32=true)
 					Y[case,current_col] = ifelse(isnan(t), 0.0, (t - m)*d)
 					quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
 				end
@@ -418,7 +419,7 @@ end
 # Arguments:
 # -- Y is the matrix to fill with decompressed genotypes.
 # -- x is the BEDfile object that contains the compressed n x p design matrix.
-# -- indices is an Integer vector that indexes the columns to use in filling Y.
+# -- indices is an Int vector that indexes the columns to use in filling Y.
 #
 # Optional Arguments:
 # -- y is temporary array for storing a column of genotypes. Defaults to zeros(n).
@@ -430,7 +431,7 @@ function decompress_genotypes!(
 	x       :: BEDFile, 
 	indices :: DenseArray{Int,1}; 
 	means   :: DenseArray{Float64,1} = mean(Float64,x), 
-	invstds :: DenseArray{Float64,1} = invstd(Float64,x, y=means)
+	invstds :: DenseArray{Float64,1} = invstd(x,means)
 )
 
 	# get dimensions of matrix to fill 
@@ -480,15 +481,15 @@ function decompress_genotypes!(
 	x       :: BEDFile, 
 	indices :: DenseArray{Int,1}; 
 	means   :: DenseArray{Float32,1} = mean(Float32,x), 
-	invstds :: DenseArray{Float32,1} = invstd(Float32,x, y=means)
+	invstds :: DenseArray{Float32,1} = invstd(x,means)
 )
 
 	# get dimensions of matrix to fill 
 	const (n,p) = size(Y)
 
 	# ensure dimension compatibility
-	n == x.n          || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
-	p <= x.p          || throw(DimensionMismatch("Y has more columns than x"))
+	n == x.n             || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
+	p <= x.p             || throw(DimensionMismatch("Y has more columns than x"))
 	length(indices) <= p || throw(DimensionMismatch("Vector 'indices' indexes more columns than are available in Y"))
 
 	# counter to ensure that we do not attempt to overfill Y
@@ -507,8 +508,8 @@ function decompress_genotypes!(
 			d = invstds[snp]
 
 			@inbounds for case = 1:n
-				t = getindex(x,x.x,case,snp,x.blocksize)
-				Y[case,current_col] = ifelse(isnan(t), 0.0, (t - m)*d)
+				t = getindex(x,x.x,case,snp,x.blocksize, float32=true)
+				Y[case,current_col] = ifelse(isnan(t), 0.0f0, (t - m)*d)
 				quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
 			end
 		else

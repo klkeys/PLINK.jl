@@ -52,7 +52,7 @@ end
 # klkeys@g.ucla.edu
 function sumsq_snp(
 	x       :: BEDFile, 
-	snp     :: Integer, 
+	snp     :: Int, 
 	means   :: DenseArray{Float64,1}, 
 	invstds :: DenseArray{Float64,1}
 ) 
@@ -74,7 +74,7 @@ end
 
 function sumsq_snp(
 	x       :: BEDFile, 
-	snp     :: Integer, 
+	snp     :: Int, 
 	means   :: DenseArray{Float32,1}, 
 	invstds :: DenseArray{Float32,1}
 ) 
@@ -268,7 +268,7 @@ end
 # for mean function, set default type to Float64
 mean(x::BEDFile; shared::Bool = true) = mean(Float64, x, shared=shared)
 
-function mean_col(T::Type, x::BEDFile, snp::Integer)
+function mean_col(T::Type, x::BEDFile, snp::Int)
 	i = 1		# count number of people
 	j = 1		# count number of bytes 
 	s = zero(T)	# accumulation variable, will eventually equal mean(x,col) for current col 
@@ -291,7 +291,7 @@ function mean_col(T::Type, x::BEDFile, snp::Integer)
 end
 
 # for previous function, set default type to Float64
-mean_col(x::BEDFile, snp::Integer) = mean_col(Float64, x, snp)
+mean_col(x::BEDFile, snp::Int) = mean_col(Float64, x, snp)
 
 
 # INVERSE STANDARD DEVIATION OF COLUMNS OF A COMPRESSED MATRIX
@@ -364,7 +364,7 @@ end
 #invstd(x::BEDFile; shared::Bool = true, y::DenseArray{Float64,1} = mean(Float64, x, shared=shared)) = invstd(Float64, x, shared=shared, y=y)
 
 
-function invstd_col(T::Type, x::BEDFile, snp::Integer, means::DenseVector)
+function invstd_col(T::Type, x::BEDFile, snp::Int, means::DenseVector)
 	s = zero(T)			# accumulation variable, will eventually equal mean(x,col) for current col 
 	t = zero(T) 		# temp variable, output of interpret_genotype
 	u = zero(T)			# count the number of people
@@ -389,7 +389,7 @@ end
 
 
 # for previous function, set default bitstype to Float64
-invstd_col(x::BEDFile, snp::Integer, means::DenseVector) = invstd_col(Float64, x, snp, means)
+invstd_col(x::BEDFile, snp::Int, means::DenseVector) = invstd_col(Float64, x, snp, means)
 
 # UPDATE PARTIAL RESIDUALS BASED ON PERMUTATION VECTOR FOR COMPRESSED X
 # 
@@ -412,7 +412,7 @@ function update_partial_residuals!(
 	x       :: BEDFile, 
 	perm    :: SharedArray{Int,1}, 
 	b       :: DenseArray{Float64,1}, 
-	k       :: Integer; 
+	k       :: Int; 
 	mean    :: DenseArray{Float64,1}  = mean(Float64,x, shared=true), 
 	invstds :: DenseArray{Float64,1}  = invstd(x,means, shared=true), 
 	Xb      :: SharedArray{Float64,1} = xb(X,b,support,k, means=means, invstds=invstds)
@@ -434,7 +434,7 @@ function update_partial_residuals!(
 	x       :: BEDFile, 
 	perm    :: SharedArray{Int,1}, 
 	b       :: DenseArray{Float32,1}, 
-	k       :: Integer; 
+	k       :: Int; 
 	mean    :: DenseArray{Float32,1}  = mean(Float32,x, shared=true), 
 	invstds :: DenseArray{Float32,1}  = invstd(x,means, shared=true), 
 	Xb      :: SharedArray{Float32,1} = xb(X,b,support,k, means=means, invstds=invstds)
@@ -455,7 +455,7 @@ function update_partial_residuals!(
 	x       :: BEDFile, 
 	perm    :: Array{Int,1}, 
 	b       :: Array{Float64,1}, 
-	k       :: Integer; 
+	k       :: Int; 
 	means   :: DenseArray{Float64,1} = mean(Float64,x, shared=false), 
 	invstds :: DenseArray{Float64,1} = invstd(x,means, shared=false), 
 	Xb      :: Array{Float64,1}      = xb(X,b,support,k, means=means, invstds=invstds)
@@ -478,7 +478,7 @@ function update_partial_residuals!(
 	x       :: BEDFile, 
 	perm    :: Array{Int,1}, 
 	b       :: Array{Float32,1}, 
-	k       :: Integer; 
+	k       :: Int; 
 	means   :: DenseArray{Float32,1} = mean(Float32,x, shared=false), 
 	invstds :: DenseArray{Float32,1} = invstd(x,means, shared=false), 
 	Xb      :: Array{Float32,1}      = xb(X,b,support,k, means=means, invstds=invstds)
@@ -514,7 +514,7 @@ function update_partial_residuals!(
 	x       :: BEDFile, 
 	indices :: BitArray{1}, 
 	b       :: SharedArray{Float64,1}, 
-	k       :: Integer; 
+	k       :: Int; 
 	means   :: SharedArray{Float64,1} = mean(Float64,x, shared=true), 
 	invstds :: SharedArray{Float64,1} = invstd(x,means, shared=true), 
 	Xb      :: SharedArray{Float64,1} = xb(X,b,indices,k, means=means, invstds=invstds)
@@ -539,7 +539,7 @@ function update_partial_residuals!(
 	x       :: BEDFile, 
 	indices :: BitArray{1}, 
 	b       :: SharedArray{Float32,1}, 
-	k       :: Integer; 
+	k       :: Int; 
 	means   :: SharedArray{Float32,1} = mean(Float32,x, shared=true), 
 	invstds :: SharedArray{Float32,1} = invstd(x,means, shared=true), 
 	Xb      :: SharedArray{Float32,1} = xb(X,b,indices,k, means=means, invstds=invstds)
@@ -562,7 +562,7 @@ function update_partial_residuals!(
 	x       :: BEDFile, 
 	indices :: BitArray{1}, 
 	b       :: Array{Float64,1}, 
-	k       :: Integer; 
+	k       :: Int; 
 	means   :: Array{Float64,1} = mean(Float64,x, shared=false), 
 	invstds :: Array{Float64,1} = invstd(x,means, shared=false), 
 	Xb      :: Array{Float64,1} = xb(X,b,indices,k, means=means, invstds=invstds)
@@ -585,7 +585,7 @@ function update_partial_residuals!(
 	x       :: BEDFile, 
 	indices :: BitArray{1}, 
 	b       :: Array{Float32,1}, 
-	k       :: Integer; 
+	k       :: Int; 
 	means   :: Array{Float32,1} = mean(Float32,x, shared=false), 
 	invstds :: Array{Float32,1} = invstd(x,means, shared=false), 
 	Xb      :: Array{Float32,1} = xb(X,b,indices,k, means=means, invstds=invstds)
@@ -620,7 +620,7 @@ end
 function dot(
 	x       :: BEDFile, 
 	y       :: DenseArray{Float64,1}, 
-	snp     :: Integer, 
+	snp     :: Int, 
 	means   :: DenseArray{Float64,1}, 
 	invstds :: DenseArray{Float64,1}
 ) 
@@ -658,7 +658,7 @@ end
 function dot(
 	x       :: BEDFile, 
 	y       :: DenseArray{Float32,1}, 
-	snp     :: Integer, 
+	snp     :: Int, 
 	means   :: DenseArray{Float32,1}, 
 	invstds :: DenseArray{Float32,1}
 ) 
@@ -713,7 +713,7 @@ end
 function dott(
 	x       :: BEDFile, 
 	b       :: DenseArray{Float64,1}, 
-	case    :: Integer, 
+	case    :: Int, 
 	indices :: BitArray{1}, 
 	means   :: DenseArray{Float64,1}, 
 	invstds :: DenseArray{Float64,1}
@@ -767,7 +767,7 @@ end
 function dott(
 	x       :: BEDFile, 
 	b       :: DenseArray{Float32,1}, 
-	case    :: Integer, 
+	case    :: Int, 
 	indices :: BitArray{1}, 
 	means   :: DenseArray{Float32,1}, 
 	invstds :: DenseArray{Float32,1}
@@ -842,7 +842,7 @@ function xb!(
 	x       :: BEDFile, 
 	b       :: DenseArray{Float64,1}, 
 	indices :: BitArray{1}, 
-	k       :: Integer; 
+	k       :: Int; 
 	means   :: DenseArray{Float64,1} = mean(Float64,x), 
 	invstds :: DenseArray{Float64,1} = invstd(x,means)
 )
@@ -864,7 +864,7 @@ function xb!(
 	x       :: BEDFile, 
 	b       :: DenseArray{Float32,1}, 
 	indices :: BitArray{1}, 
-	k       :: Integer; 
+	k       :: Int; 
 	means   :: DenseArray{Float32,1} = mean(Float32,x), 
 	invstds :: DenseArray{Float32,1} = invstd(x,means)
 )
@@ -902,7 +902,7 @@ function xb(
 	x       :: BEDFile, 
 	b       :: Array{Float64,1}, 
 	indices :: BitArray{1}, 
-	k       :: Integer; 
+	k       :: Int; 
 	means   :: Array{Float64,1} = mean(Float64,x, shared=false), 
 	invstds :: Array{Float64,1} = invstd(x,means, shared=false)
 ) 
@@ -916,7 +916,7 @@ function xb(
 	x       :: BEDFile, 
 	b       :: Array{Float32,1}, 
 	indices :: BitArray{1}, 
-	k       :: Integer; 
+	k       :: Int; 
 	means   :: Array{Float32,1} = mean(Float32,x, shared=false), 
 	invstds :: Array{Float32,1} = invstd(x,means, shared=false)
 ) 
@@ -929,7 +929,7 @@ function xb(
 	x       :: BEDFile, 
 	b       :: SharedArray{Float64,1}, 
 	indices :: BitArray{1}, 
-	k       :: Integer; 
+	k       :: Int; 
 	means   :: SharedArray{Float64,1} = mean(Float64,x, shared=true), 
 	invstds :: SharedArray{Float64,1} = invstd(x,means, shared=true)
 ) 
@@ -943,7 +943,7 @@ function xb(
 	x       :: BEDFile, 
 	b       :: SharedArray{Float32,1}, 
 	indices :: BitArray{1}, 
-	k       :: Integer; 
+	k       :: Int; 
 	means   :: SharedArray{Float32,1} = mean(Float32,x, shared=true), 
 	invstds :: SharedArray{Float32,1} = invstd(x,means, shared=true)
 ) 
