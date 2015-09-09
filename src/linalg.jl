@@ -627,21 +627,18 @@ function dot(
 	s = zero(Float64)		# accumulation variable, will eventually equal dot(y,z)
 
 	if snp <= x.p
-#		t = 0.0				# store interpreted genotype
 		m = means[snp]		# mean of SNP predictor
 		d = invstds[snp]	# 1/std of SNP predictor
 
 		# loop over all individuals
 		@inbounds for case = 1:x.n
 			t = getindex(x,x.x,case,snp,x.blocksize)
+
 			# handle exceptions on t
-#			if isnan(t)
-#				t = 0.0
-#			else
-#				t  = (t - m)
-#				s += y[case] * t 
-				s += y[case] * (t - m) 
-#			end
+			t = ifelse(isnan(t), 0.0, t - m)
+
+			# accumulate dot product
+			s += y[case] * t 
 		end
 
 		# return the (normalized) dot product 
@@ -665,21 +662,18 @@ function dot(
 	s = zero(Float32)		# accumulation variable, will eventually equal dot(y,z)
 
 	if snp <= x.p
-#		t = 0.0				# store interpreted genotype
 		m = means[snp]		# mean of SNP predictor
 		d = invstds[snp]	# 1/std of SNP predictor
 
 		# loop over all individuals
 		@inbounds for case = 1:x.n
 			t = getindex(x,x.x,case,snp,x.blocksize)
+
 			# handle exceptions on t
-#			if isnan(t)
-#				t = 0.0
-#			else
-#				t  = (t - m)
-#				s += y[case] * t 
-				s += y[case] * (t - m) 
-#			end
+			t = ifelse(isnan(t), 0.0f0, t - m)
+
+			# accumulate dot product
+			s += y[case] * t 
 		end
 
 		# return the (normalized) dot product 
@@ -732,21 +726,31 @@ function dott(
 			t              = geno64[genotype + ONE8]
 
 			# handle exceptions on t
-			if isnan(t)
-				t = zero(Float64) 
-			else
-				t  = (t - means[snp]) * invstds[snp] 
-				s += b[snp] * t 
-			end
+			t = ifelse(isnan(t), 0.0, (t - means[snp]) * invstds[snp])
 
+			# accumulate dot product
+			s += b[snp] * t 
+
+			# increment snp counter
 			snp += 1 
+
+			# if we are at last snp, then return 
 			snp > x.p && return s 
+
+			# by this point, we are not done yet,
+			# so we increment bitshift by two
 			k += 2
+
+			# if bitshift exceeds end of byte,
+			# then reset bitshift and proceed to next byte
 			if k > 6
 				k  = 0
 				j += 1
 			end
 		else
+
+			# in this case, the snp is not indexed
+			# no math necessary, only need to track indices
 			snp += 1
 			snp > x.p && return s 
 			k += 2
@@ -786,21 +790,31 @@ function dott(
 			t              = geno32[genotype + ONE8]
 
 			# handle exceptions on t
-			if isnan(t)
-				t = zero(Float32) 
-			else
-				t  = (t - means[snp]) * invstds[snp] 
-				s += b[snp] * t 
-			end
+			t = ifelse(isnan(t), 0.0f0, (t - means[snp]) * invstds[snp])
 
+			# accumulate dot product
+			s += b[snp] * t 
+
+			# increment snp counter
 			snp += 1 
+
+			# if we are at last snp, then return 
 			snp > x.p && return s 
+
+			# by this point, we are not done yet,
+			# so we increment bitshift by two
 			k += 2
+
+			# if bitshift exceeds end of byte,
+			# then reset bitshift and proceed to next byte
 			if k > 6
 				k  = 0
 				j += 1
 			end
 		else
+
+			# in this case, the snp is not indexed
+			# no math necessary, only need to track indices
 			snp += 1
 			snp > x.p && return s 
 			k += 2
