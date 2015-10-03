@@ -658,7 +658,7 @@ function dot(
 		return s*d 
 	else
 		@inbounds for case = 1:x.n
-			s += x.x2[case,snp] * y[case]
+			s += x.x2[case,x.p-snp] * y[case]
 		end
 		return s
 	end
@@ -693,7 +693,7 @@ function dot(
 		return s*d 
 	else
 		@inbounds for case = 1:x.n
-			s += x.x2[case,snp] * y[case]
+			s += x.x2[case,x.p-snp] * y[case]
 		end
 		return s
 	end
