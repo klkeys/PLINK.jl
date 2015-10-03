@@ -637,7 +637,7 @@ function dot(
 	means   :: DenseArray{Float64,1}, 
 	invstds :: DenseArray{Float64,1}
 ) 
-	s = zero(Float64)		# accumulation variable, will eventually equal dot(y,z)
+	s = 0.0		# accumulation variable, will eventually equal dot(y,z)
 
 	if snp <= x.p
 		m = means[snp]		# mean of SNP predictor
@@ -658,7 +658,7 @@ function dot(
 		return s*d 
 	else
 		@inbounds for case = 1:x.n
-			s += x.x2[case,x.p-snp] * y[case]
+			s += x.x2[case,snp-x.p] * y[case]
 		end
 		return s
 	end
@@ -672,7 +672,7 @@ function dot(
 	means   :: DenseArray{Float32,1}, 
 	invstds :: DenseArray{Float32,1}
 ) 
-	s = zero(Float32)		# accumulation variable, will eventually equal dot(y,z)
+	s = 0.0f0		# accumulation variable, will eventually equal dot(y,z)
 
 	if snp <= x.p
 		m = means[snp]		# mean of SNP predictor
@@ -693,7 +693,7 @@ function dot(
 		return s*d 
 	else
 		@inbounds for case = 1:x.n
-			s += x.x2[case,x.p-snp] * y[case]
+			s += x.x2[case,snp-x.p] * y[case]
 		end
 		return s
 	end
