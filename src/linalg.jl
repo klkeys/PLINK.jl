@@ -1010,6 +1010,7 @@ function xty!(
 	# loop over the desired number of predictors 
 	@sync @inbounds @parallel for snp = 1:p
 		Xty[snp] = dot(x,y,snp,means,invstds)
+	end
 	return nothing 
 end 
 
