@@ -213,16 +213,29 @@ function sumsq(
 end
 
 
-function sumsq(
-	x       :: BEDFile; 
-	shared  :: Bool = true, 
-	means   :: DenseArray{Float32,1} = mean(Float32, x, shared=shared), 
-	invstds :: DenseArray{Float32,1} = invstd(x,means, shared=shared)
-) 
-	y = ifelse(shared, SharedArray(Float32, x.p + x.p2, init = S -> S[localindexes(S)] = 0.0f0), zeros(Float32, x.p + x.p2))
-	sumsq!(y,x,means,invstds)
-	return y
-end
+#function sumsq(
+#	x       :: BEDFile; 
+#	shared  :: Bool = true, 
+#	means   :: DenseArray{Float32,1} = mean(Float32, x, shared=shared), 
+#	invstds :: DenseArray{Float32,1} = invstd(x,means, shared=shared)
+#) 
+#	y = ifelse(shared, SharedArray(Float32, x.p + x.p2, init = S -> S[localindexes(S)] = 0.0f0), zeros(Float32, x.p + x.p2))
+#	sumsq!(y,x,means,invstds)
+#	return y
+#end
+
+
+#function sumsq(
+#	T       :: Type,
+#	x       :: BEDFile; 
+#	shared  :: Bool = true, 
+#	means   :: DenseArray{T,1} = mean(T, x, shared=shared), 
+#	invstds :: DenseArray{T,1} = invstd(x,means, shared=shared)
+#) 
+#	y = ifelse(shared, SharedArray(T, x.p + x.p2, init = S -> S[localindexes(S)] = zero(T)), zeros(T, x.p + x.p2))
+#	sumsq!(y,x,means,invstds)
+#	return y
+#end
 
 
 # MEAN OF COLUMNS OF A COMPRESSED MATRIX
@@ -269,8 +282,8 @@ end
 mean(x::BEDFile; shared::Bool = true) = mean(Float64, x, shared=shared)
 
 function mean_col(T::Type, x::BEDFile, snp::Int)
-	i = 1		# count number of people
-	j = 1		# count number of bytes 
+#	i = 1		# count number of people
+#	j = 1		# count number of bytes 
 	s = zero(T)	# accumulation variable, will eventually equal mean(x,col) for current col 
 	t = zero(T) # temp variable, output of interpret_genotype
 	u = zero(T)	# count the number of people
@@ -987,16 +1000,16 @@ function xty!(
 	x       :: BEDFile, 
 	y       :: SharedArray{Float64,1}; 
 	means   :: SharedArray{Float64,1} = mean(Float64,x, shared=true), 
-	invstds :: SharedArray{Float64,1} = invstd(x,means, shared=true)
+	invstds :: SharedArray{Float64,1} = invstd(x,means, shared=true),
+	p       :: Int = size(x,2) 
 ) 
 	# error checking
-	x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
-	x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
+	p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
+	x.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
 
 	# loop over the desired number of predictors 
-	@sync @inbounds @parallel for snp = 1:x.p
+	@sync @inbounds @parallel for snp = 1:p
 		Xty[snp] = dot(x,y,snp,means,invstds)
-	end
 	return nothing 
 end 
 
@@ -1006,14 +1019,15 @@ function xty!(
 	x       :: BEDFile, 
 	y       :: SharedArray{Float32,1}; 
 	means   :: SharedArray{Float32,1} = mean(Float32,x, shared=true), 
-	invstds :: SharedArray{Float32,1} = invstd(x,means, shared=true)
+	invstds :: SharedArray{Float32,1} = invstd(x,means, shared=true),
+	p       :: Int = size(x,2) 
 ) 
 	# error checking
 	x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
 	x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
 
 	# loop over the desired number of predictors 
-	@sync @inbounds @parallel for snp = 1:x.p
+	@sync @inbounds @parallel for snp = 1:p
 		Xty[snp] = dot(x,y,snp,means,invstds)
 	end
 	return nothing 
@@ -1024,14 +1038,15 @@ function xty!(
 	x       :: BEDFile, 
 	y       :: Array{Float64,1}; 
 	means   :: Array{Float64,1} = mean(Float64,x, shared=false), 
-	invstds :: Array{Float64,1} = invstd(x,means, shared=false)
+	invstds :: Array{Float64,1} = invstd(x,means, shared=false),
+	p       :: Int = size(x,2) 
 ) 
 	# error checking
 	x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
 	x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
 
 	# loop over the desired number of predictors 
-	@inbounds for snp = 1:x.p
+	@inbounds for snp = 1:p
 		Xty[snp] = dot(x,y,snp,means,invstds)
 	end
 	return nothing 
@@ -1043,14 +1058,15 @@ function xty!(
 	x       :: BEDFile, 
 	y       :: Array{Float32,1}; 
 	means   :: Array{Float32,1} = mean(Float32,x, shared=false), 
-	invstds :: Array{Float32,1} = invstd(x,means, shared=false)
+	invstds :: Array{Float32,1} = invstd(x,means, shared=false),
+	p       :: Int = size(x,2) 
 ) 
 	# error checking
 	x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
 	x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
 
 	# loop over the desired number of predictors 
-	@inbounds for snp = 1:x.p
+	@inbounds for snp = 1:p
 		Xty[snp] = dot(x,y,snp,means,invstds)
 	end
 	return nothing 
