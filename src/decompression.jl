@@ -48,6 +48,9 @@ function getindex(
 	end
 end
 
+# default for getindex with BEDFile, to enable array-like indexing
+getindex(x::BEDFile, row::Int, col::Int) = getindex(x, x.x, row, col, x.blocksize, interpret=true, float32=false)
+
 function getindex(x::BEDFile, rowidx::BitArray{1}, colidx::BitArray{1})
 
 	yn = sum(rowidx)
@@ -240,8 +243,10 @@ function decompress_genotypes!(
 	invstds :: DenseArray{Float64,1} = invstd(x,means)
 ) 
 
-	# extract size of Y
-	const (n,p) = size(Y)
+	# get dimensions of matrix to fill 
+#	const (n,p) = size(Y)
+	const n = size(Y,1)
+	const p = size(Y,2)
 
 	# ensure dimension compatibility
 	n == x.n || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
@@ -266,8 +271,10 @@ function decompress_genotypes!(
 	invstds :: DenseArray{Float32,1} = invstd(x,means)
 ) 
 
-	# extract size of Y
-	const (n,p) = size(Y)
+	# get dimensions of matrix to fill 
+#	const (n,p) = size(Y)
+	const n = size(Y,1)
+	const p = size(Y,2)
 
 	# ensure dimension compatibility
 	n == x.n || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
@@ -310,7 +317,9 @@ function decompress_genotypes!(
 )
 
 	# get dimensions of matrix to fill 
-	const (n,p) = size(Y)
+#	const (n,p) = size(Y)
+	const n = size(Y,1)
+	const p = size(Y,2)
 
 	# ensure dimension compatibility
 	n == x.n          || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
@@ -364,7 +373,9 @@ function decompress_genotypes!(
 )
 
 	# get dimensions of matrix to fill 
-	const (n,p) = size(Y)
+#	const (n,p) = size(Y)
+	const n = size(Y,1)
+	const p = size(Y,2)
 
 	# ensure dimension compatibility
 	n == x.n          || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
