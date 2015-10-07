@@ -716,6 +716,148 @@ end
 #
 # coded by Kevin L. Keys (2015)
 # klkeys@g.ucla.edu
+#function dott(
+#	x       :: BEDFile, 
+#	b       :: DenseArray{Float64,1}, 
+#	case    :: Int, 
+#	indices :: BitArray{1}, 
+#	means   :: DenseArray{Float64,1}, 
+#	invstds :: DenseArray{Float64,1}
+#) 
+#	snp = 1
+#	j = 1
+#	k = 0
+#	s = 0.0		# accumulation variable, will eventually equal dot(y,z)
+#	t = 0.0		# store interpreted genotype
+#	while snp <= x.p 
+#
+#		# if current index of b is FALSE, then skip it since it does not contribute to Xb
+#		if indices[snp] 
+#			genotype_block = x.xt[(case-1)*x.tblocksize + j]
+#			genotype       = (genotype_block >>> k) & THREE8
+#			t              = geno64[genotype + ONE8]
+#
+#			# handle exceptions on t
+#			t = ifelse(isnan(t), 0.0, (t - means[snp]) * invstds[snp])
+#
+#			# accumulate dot product
+#			s += b[snp] * t 
+#
+#			# increment snp counter
+#			snp += 1 
+#
+#			# if we are at last snp, then return 
+##			snp > x.p && return s 
+#			snp > x.p && println("snp exceeds x.p, s = $s, breaking...")
+#			snp > x.p && break 
+#
+#			# by this point, we are not done yet,
+#			# so we increment bitshift by two
+#			k += 2
+#
+#			# if bitshift exceeds end of byte,
+#			# then reset bitshift and proceed to next byte
+#			if k > 6
+#				k  = 0
+#				j += 1
+#			end
+#		else
+#
+#			# in this case, the snp is not indexed
+#			# no math necessary, only need to track indices
+#			snp += 1
+##			snp > x.p && return s 
+#			snp > x.p && println("snp exceeds x.p, s = $s, breaking...")
+#			snp > x.p && break 
+#			k += 2
+#			if k > 6
+#				k  = 0
+#				j += 1
+#			end
+#		end
+#	end
+#	for snp2 = (x.p+1):(x.p+x.p2)
+#		if indices[snp2]
+##			s += b[snp2] * (x.x2t[snp2-x.p,case] - means[snp2]) * invstds[snp2] 
+#			s += b[snp2] * x.x2t[snp2-x.p,case]
+#			println("value of s is $s")
+#		end
+#	end
+#
+#	# return the dot product 
+#	return s 
+#end
+#
+#function dott(
+#	x       :: BEDFile, 
+#	b       :: DenseArray{Float32,1}, 
+#	case    :: Int, 
+#	indices :: BitArray{1}, 
+#	means   :: DenseArray{Float32,1}, 
+#	invstds :: DenseArray{Float32,1}
+#) 
+#	snp = 1
+#	j = 1
+#	k = 0
+#	s = 0.0		# accumulation variable, will eventually equal dot(y,z)
+#	t = 0.0		# store interpreted genotype
+#	while snp <= x.p 
+#
+#		# if current index of b is FALSE, then skip it since it does not contribute to Xb
+#		if indices[snp] 
+#			genotype_block = x.xt[(case-1)*x.tblocksize + j]
+#			genotype       = (genotype_block >>> k) & THREE8
+#			t              = geno32[genotype + ONE8]
+#
+#			# handle exceptions on t
+#			t = ifelse(isnan(t), 0.0f0, (t - means[snp]) * invstds[snp])
+#
+#			# accumulate dot product
+#			s += b[snp] * t 
+#
+#			# increment snp counter
+#			snp += 1 
+#
+#			# if we are at last snp, then return 
+##			snp > x.p && return s 
+#			snp > x.p && break 
+#
+#			# by this point, we are not done yet,
+#			# so we increment bitshift by two
+#			k += 2
+#
+#			# if bitshift exceeds end of byte,
+#			# then reset bitshift and proceed to next byte
+#			if k > 6
+#				k  = 0
+#				j += 1
+#			end
+#		else
+#
+#			# in this case, the snp is not indexed
+#			# no math necessary, only need to track indices
+#			snp += 1
+##			snp > x.p && return s 
+#			snp > x.p && break 
+#			k += 2
+#			if k > 6
+#				k  = 0
+#				j += 1
+#			end
+#		end
+#	end
+#	@inbounds for snp2 = (x.p+1):(x.p+x.p2)
+#		if indices[snp2]
+#			s += b[snp2] * (x.x2t[snp2-x.p,case] - means[snp2]) * invstds[snp2] 
+#		end
+#	end
+#
+#	# return the dot product 
+#	return s 
+#end
+
+
+
 function dott(
 	x       :: BEDFile, 
 	b       :: DenseArray{Float64,1}, 
@@ -724,133 +866,36 @@ function dott(
 	means   :: DenseArray{Float64,1}, 
 	invstds :: DenseArray{Float64,1}
 ) 
-	snp = 1
-	j = 1
-	k = 0
 	s = 0.0		# accumulation variable, will eventually equal dot(y,z)
 	t = 0.0		# store interpreted genotype
-	@inbounds while snp <= x.p 
+	for snp = 1:x.p 
 
 		# if current index of b is FALSE, then skip it since it does not contribute to Xb
 		if indices[snp] 
-			genotype_block = x.xt[(case-1)*x.tblocksize + j]
-			genotype       = (genotype_block >>> k) & THREE8
-			t              = geno64[genotype + ONE8]
+
+			# decompress genotype, this time from transposed matrix
+			t = getindex(x,x.xt,snp,case,x.tblocksize)
 
 			# handle exceptions on t
 			t = ifelse(isnan(t), 0.0, (t - means[snp]) * invstds[snp])
 
 			# accumulate dot product
 			s += b[snp] * t 
-
-			# increment snp counter
-			snp += 1 
-
-			# if we are at last snp, then return 
-#			snp > x.p && return s 
-			snp > x.p && break 
-
-			# by this point, we are not done yet,
-			# so we increment bitshift by two
-			k += 2
-
-			# if bitshift exceeds end of byte,
-			# then reset bitshift and proceed to next byte
-			if k > 6
-				k  = 0
-				j += 1
-			end
-		else
-
-			# in this case, the snp is not indexed
-			# no math necessary, only need to track indices
-			snp += 1
-#			snp > x.p && return s 
-			snp > x.p && break 
-			k += 2
-			if k > 6
-				k  = 0
-				j += 1
-			end
 		end
 	end
-	@inbounds for snp = (x.p+1):(x.p+x.p2)
-		if indices[snp]
-			s += b[snp] * (x.x2t[snp-x.p,case] - means[snp]) * invstds[snp] 
-		end
-	end
-
-	# return the dot product 
-	return s 
-end
-
-function dott(
-	x       :: BEDFile, 
-	b       :: DenseArray{Float32,1}, 
-	case    :: Int, 
-	indices :: BitArray{1}, 
-	means   :: DenseArray{Float32,1}, 
-	invstds :: DenseArray{Float32,1}
-) 
-	snp = 1
-	j = 1
-	k = 0
-	s = 0.0		# accumulation variable, will eventually equal dot(y,z)
-	t = 0.0		# store interpreted genotype
-	while snp <= x.p 
-
-		# if current index of b is FALSE, then skip it since it does not contribute to Xb
-		if indices[snp] 
-			genotype_block = x.xt[(case-1)*x.tblocksize + j]
-			genotype       = (genotype_block >>> k) & THREE8
-			t              = geno32[genotype + ONE8]
-
-			# handle exceptions on t
-			t = ifelse(isnan(t), 0.0f0, (t - means[snp]) * invstds[snp])
-
-			# accumulate dot product
-			s += b[snp] * t 
-
-			# increment snp counter
-			snp += 1 
-
-			# if we are at last snp, then return 
-#			snp > x.p && return s 
-			snp > x.p && break 
-
-			# by this point, we are not done yet,
-			# so we increment bitshift by two
-			k += 2
-
-			# if bitshift exceeds end of byte,
-			# then reset bitshift and proceed to next byte
-			if k > 6
-				k  = 0
-				j += 1
-			end
-		else
-
-			# in this case, the snp is not indexed
-			# no math necessary, only need to track indices
-			snp += 1
-#			snp > x.p && return s 
-			snp > x.p && break 
-			k += 2
-			if k > 6
-				k  = 0
-				j += 1
-			end
-		end
-	end
+	println("snp exceeds x.p, s = $s, breaking...")
 	for snp = (x.p+1):(x.p+x.p2)
 		if indices[snp]
 			s += b[snp] * (x.x2t[snp-x.p,case] - means[snp]) * invstds[snp] 
+			println("value of s is $s")
 		end
 	end
 
 	# return the dot product 
 	return s 
 end
+
+
 
 
 # PERFORM X * BETA
@@ -886,7 +931,8 @@ function xb!(
 	k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
 
 	# loop over the desired number of predictors 
-	@sync @inbounds @parallel for case = 1:x.n
+#	@sync @inbounds @parallel for case = 1:x.n
+	@inbounds for case = 1:x.n
 		Xb[case] = dott(x, b, case, indices, means, invstds)	
 	end
 
