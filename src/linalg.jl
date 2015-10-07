@@ -637,11 +637,11 @@ function dot(
 	means   :: DenseArray{Float64,1}, 
 	invstds :: DenseArray{Float64,1}
 ) 
-	s = 0.0		# accumulation variable, will eventually equal dot(y,z)
+	s = 0.0				# accumulation variable, will eventually equal dot(y,z)
+	m = means[snp]		# mean of SNP predictor
+	d = invstds[snp]	# 1/std of SNP predictor
 
 	if snp <= x.p
-		m = means[snp]		# mean of SNP predictor
-		d = invstds[snp]	# 1/std of SNP predictor
 
 		# loop over all individuals
 		@inbounds for case = 1:x.n
@@ -653,15 +653,14 @@ function dot(
 			# accumulate dot product
 			s += y[case] * t 
 		end
-
-		# return the (normalized) dot product 
-		return s*d 
 	else
 		@inbounds for case = 1:x.n
-			s += (x.x2[case,snp-x.p] - means[snp]) * invstds[snp] * y[case]
+			s += (x.x2[case,snp-x.p] - m) * y[case]
 		end
-		return s
 	end
+
+	# return the (normalized) dot product 
+	return s*d 
 end
 
 
@@ -672,31 +671,31 @@ function dot(
 	means   :: DenseArray{Float32,1}, 
 	invstds :: DenseArray{Float32,1}
 ) 
-	s = 0.0f0		# accumulation variable, will eventually equal dot(y,z)
+	s = 0.0f0			# accumulation variable, will eventually equal dot(y,z)
+	m = means[snp]		# mean of SNP predictor
+	d = invstds[snp]	# 1/std of SNP predictor
 
 	if snp <= x.p
-		m = means[snp]		# mean of SNP predictor
-		d = invstds[snp]	# 1/std of SNP predictor
 
 		# loop over all individuals
 		@inbounds for case = 1:x.n
 			t = getindex(x,x.x,case,snp,x.blocksize)
 
 			# handle exceptions on t
-			t = ifelse(isnan(t), 0.0f0, t - m)
+			t = ifelse(isnan(t), 0.0, t - m)
 
 			# accumulate dot product
 			s += y[case] * t 
 		end
-
-		# return the (normalized) dot product 
-		return s*d 
 	else
 		@inbounds for case = 1:x.n
-			s += (x.x2[case,snp-x.p] - means[snp]) * invstds[snp] * y[case]
+			s += (x.x2[case,snp-x.p] - m) * y[case]
 		end
-		return s
 	end
+
+	# return the (normalized) dot product 
+	return s*d 
+
 end
 
 # DOT PRODUCT ALONG ROWS OF X
