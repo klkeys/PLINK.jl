@@ -722,7 +722,8 @@ function dott(
 	case    :: Int, 
 	indices :: BitArray{1}, 
 	means   :: DenseArray{Float64,1}, 
-	invstds :: DenseArray{Float64,1}
+	invstds :: DenseArray{Float64,1};
+	p       :: Int = size(x,2) 
 ) 
 	snp = 1
 	j = 1
@@ -773,7 +774,9 @@ function dott(
 		end
 	end
 	@inbounds for snp = (x.p+1):(x.p+x.p2)
-		s += b[snp] * (x.x2t[snp,case] - means[snp]) * invstds[snp] 
+		if indices[snp]
+			s += b[snp] * (x.x2t[snp,case] - means[snp]) * invstds[snp] 
+		end
 	end
 
 	# return the dot product 
@@ -837,7 +840,9 @@ function dott(
 		end
 	end
 	@inbounds for snp = (x.p+1):(x.p+x.p2)
-		s += b[snp] * (x.x2t[snp,case] - means[snp]) * invstds[snp] 
+		if indices[snp]
+			s += b[snp] * (x.x2t[snp,case] - means[snp]) * invstds[snp] 
+		end
 	end
 
 	# return the dot product 
