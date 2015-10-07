@@ -776,7 +776,7 @@ function dott(
 	end
 	@inbounds for snp = (x.p+1):(x.p+x.p2)
 		if indices[snp]
-			s += b[snp] * (x.x2t[snp,case] - means[snp]) * invstds[snp] 
+			s += b[snp] * (x.x2t[snp-x.p,case] - means[snp]) * invstds[snp] 
 		end
 	end
 
@@ -844,7 +844,7 @@ function dott(
 	end
 	for snp = (x.p+1):(x.p+x.p2)
 		if indices[snp]
-			s += b[snp] * (x.x2t[snp,case] - means[snp]) * invstds[snp] 
+			s += b[snp] * (x.x2t[snp-x.p,case] - means[snp]) * invstds[snp] 
 		end
 	end
 
