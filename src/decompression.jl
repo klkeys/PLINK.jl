@@ -240,22 +240,36 @@ function decompress_genotypes!(
 	x       :: BEDFile; 
 	y       :: DenseArray{Float64,1} = SharedArray(Float64, x.n), 
 	means   :: DenseArray{Float64,1} = mean(Float64,x), 
-	invstds :: DenseArray{Float64,1} = invstd(x,means)
+	invstds :: DenseArray{Float64,1} = invstd(x,means),
+	standardize :: Bool = true
 ) 
 
 	# get dimensions of matrix to fill 
-#	const (n,p) = size(Y)
-	const n = size(Y,1)
-	const p = size(Y,2)
+	const (n,p) = size(Y)
+	const xn = size(x,1)
+	const xp = size(x,2)
 
 	# ensure dimension compatibility
-	n == x.n || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
-	p <= x.p || throw(DimensionMismatch("Y has more columns than x"))
+	n == xn || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
+	p <= xp || throw(DimensionMismatch("Y has more columns than x"))
 
-	@inbounds for j = 1:p
-		decompress_genotypes!(y,x,j,means,invstds)	
+#	@inbounds for j = 1:xp
+#		decompress_genotypes!(y,x,j,means,invstds)	
+#		@inbounds for i = 1:n
+#			Y[i,j] = y[i]
+#		end
+#	end 
+	
+	@inbounds for j = 1:xp
+		if standardize
+			m = means[j]
+			s = invstds[j]
+		end
 		@inbounds for i = 1:n
-			Y[i,j] = y[i]
+			Y[i,j] = getindex(x,x.x,i,j,x.blocksize,interpret=true,float32=false) 
+			if standardize
+				Y[i,j] = (Y[i,j] - m) * s
+			end
 		end
 	end 
 
@@ -268,22 +282,36 @@ function decompress_genotypes!(
 	x       :: BEDFile; 
 	y       :: DenseArray{Float32,1} = SharedArray(Float32, x.n), 
 	means   :: DenseArray{Float32,1} = mean(Float32,x), 
-	invstds :: DenseArray{Float32,1} = invstd(x,means)
+	invstds :: DenseArray{Float32,1} = invstd(x,means),
+	standardize :: Bool = true
 ) 
 
 	# get dimensions of matrix to fill 
-#	const (n,p) = size(Y)
-	const n = size(Y,1)
-	const p = size(Y,2)
+	const (n,p) = size(Y)
+	const xn = size(x,1)
+	const xp = size(x,2)
 
 	# ensure dimension compatibility
-	n == x.n || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
-	p <= x.p || throw(DimensionMismatch("Y has more columns than x"))
+	n == xn || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
+	p <= xp || throw(DimensionMismatch("Y has more columns than x"))
 
-	@inbounds for j = 1:p
-		decompress_genotypes!(y,x,j,means,invstds)	
+#	@inbounds for j = 1:xp
+#		decompress_genotypes!(y,x,j,means,invstds)	
+#		@inbounds for i = 1:n
+#			Y[i,j] = y[i]
+#		end
+#	end 
+	
+	@inbounds for j = 1:xp
+		if standardize
+			m = means[j]
+			s = invstds[j]
+		end
 		@inbounds for i = 1:n
-			Y[i,j] = y[i]
+			Y[i,j] = getindex(x,x.x,i,j,x.blocksize,interpret=true,float32=true) 
+			if standardize
+				Y[i,j] = (Y[i,j] - m) * s
+			end
 		end
 	end 
 
