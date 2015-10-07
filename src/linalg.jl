@@ -774,7 +774,7 @@ function dott(
 		end
 	end
 	@inbounds for snp = (x.p+1):(x.p+x.p2)
-		s += b[snp] * x.x2t[snp,case]
+		s += b[snp] * (x.x2t[snp,case] - means[snp]) * invstds[snp] 
 	end
 
 	# return the dot product 
@@ -838,7 +838,7 @@ function dott(
 		end
 	end
 	@inbounds for snp = (x.p+1):(x.p+x.p2)
-		s += b[snp] * x.x2t[snp,case]
+		s += b[snp] * (x.x2t[snp,case] - means[snp]) * invstds[snp] 
 	end
 
 	# return the dot product 
