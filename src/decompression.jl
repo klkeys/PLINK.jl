@@ -474,10 +474,12 @@ function decompress_genotypes!(
 
 	# get dimensions of matrix to fill 
 	const (n,p) = size(Y)
+	const xn = x.n
+	const xp = size(x,2)
 
 	# ensure dimension compatibility
-	n == x.n          || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
-	p <= x.p          || throw(DimensionMismatch("Y has more columns than x"))
+	n == xn          || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
+	p <= xp          || throw(DimensionMismatch("Y has more columns than x"))
 	length(indices) <= p || throw(DimensionMismatch("Vector 'indices' indexes more columns than are available in Y"))
 
 	# counter to ensure that we do not attempt to overfill Y
@@ -490,11 +492,10 @@ function decompress_genotypes!(
 		current_col += 1
 		quiet || println("filling current column $current_col with snp $snp")
 
+		# extract column mean, inv std
+		m = means[snp]
+		d = invstds[snp]
 		if snp <= x.p
-			# extract column mean, inv std
-			m = means[snp]
-			d = invstds[snp]
-
 			@inbounds for case = 1:n
 				t = getindex(x,x.x,case,snp,x.blocksize)
 				Y[case,current_col] = ifelse(isnan(t), 0.0, (t - m)*d)
@@ -502,12 +503,12 @@ function decompress_genotypes!(
 			end
 		else
 			@inbounds for case = 1:n
-				Y[case,current_col] = x.x2[case,(snp-x.p)]
+				Y[case,current_col] = (x.x2[case,(snp-x.p)] - m) * d
 			end
 		end
 
 		# quit when Y is filled
-		current_col == p && return Y
+		current_col == p && return nothing 
 	end 
 
 	return nothing 
@@ -524,10 +525,12 @@ function decompress_genotypes!(
 
 	# get dimensions of matrix to fill 
 	const (n,p) = size(Y)
+	const xn = x.n
+	const xp = size(x,2)
 
 	# ensure dimension compatibility
-	n == x.n             || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
-	p <= x.p             || throw(DimensionMismatch("Y has more columns than x"))
+	n == xn          || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
+	p <= xp          || throw(DimensionMismatch("Y has more columns than x"))
 	length(indices) <= p || throw(DimensionMismatch("Vector 'indices' indexes more columns than are available in Y"))
 
 	# counter to ensure that we do not attempt to overfill Y
@@ -540,25 +543,25 @@ function decompress_genotypes!(
 		current_col += 1
 		quiet || println("filling current column $current_col with snp $snp")
 
+		# extract column mean, inv std
+		m = means[snp]
+		d = invstds[snp]
 		if snp <= x.p
-			# extract column mean, inv std
-			m = means[snp]
-			d = invstds[snp]
-
 			@inbounds for case = 1:n
-				t = getindex(x,x.x,case,snp,x.blocksize, float32=true)
+				t = getindex(x,x.x,case,snp,x.blocksize)
 				Y[case,current_col] = ifelse(isnan(t), 0.0f0, (t - m)*d)
 				quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
 			end
 		else
 			@inbounds for case = 1:n
-				Y[case,current_col] = x.x2[case,(snp-x.p)]
+				Y[case,current_col] = (x.x2[case,(snp-x.p)] - m) * d
 			end
 		end
 
 		# quit when Y is filled
-		current_col == p && return Y
+		current_col == p && return nothing 
 	end 
 
 	return nothing 
+
 end
