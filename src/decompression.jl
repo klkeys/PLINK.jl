@@ -380,6 +380,7 @@ function decompress_genotypes!(
 			else
 				@inbounds for case = 1:n
 					Y[case,current_col] = (x.x2[case,(snp-x.p)] - m) * d
+					quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
 				end
 			end
 
@@ -428,13 +429,14 @@ function decompress_genotypes!(
 
 			if snp <= x.p
 				@inbounds for case = 1:n
-					t = getindex(x,x.x,case,snp,x.blocksize)
+					t = getindex(x,x.x,case,snp,x.blocksize, float32=true)
 					Y[case,current_col] = ifelse(isnan(t), 0.0f0, (t - m)*d)
 					quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
 				end
 			else
 				@inbounds for case = 1:n
 					Y[case,current_col] = (x.x2[case,(snp-x.p)] - m) * d
+					quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
 				end
 			end
 

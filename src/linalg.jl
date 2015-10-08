@@ -883,11 +883,11 @@ function dott(
 			s += b[snp] * t 
 		end
 	end
-	println("snp exceeds x.p, s = $s, breaking...")
+#	println("snp exceeds x.p, s = $s, breaking...")
 	for snp = (x.p+1):(x.p+x.p2)
 		if indices[snp]
 			s += b[snp] * (x.x2t[snp-x.p,case] - means[snp]) * invstds[snp] 
-			println("value of s is $s")
+#			println("value of s is $s")
 		end
 	end
 
@@ -931,8 +931,8 @@ function xb!(
 	k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
 
 	# loop over the desired number of predictors 
-#	@sync @inbounds @parallel for case = 1:x.n
-	@inbounds for case = 1:x.n
+	@sync @inbounds @parallel for case = 1:x.n
+#	@inbounds for case = 1:x.n
 		Xb[case] = dott(x, b, case, indices, means, invstds)	
 	end
 
