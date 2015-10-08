@@ -655,7 +655,7 @@ function dot(
 		end
 	else
 		@inbounds for case = 1:x.n
-			s += (x.x2[case,snp-x.p] - m) * d * y[case]
+			s += (x.x2[case,snp-x.p] - m)  * y[case]
 		end
 	end
 
@@ -689,7 +689,7 @@ function dot(
 		end
 	else
 		@inbounds for case = 1:x.n
-			s += (x.x2[case,snp-x.p] - m) * d * y[case]
+			s += (x.x2[case,snp-x.p] - m) * y[case]
 		end
 	end
 
