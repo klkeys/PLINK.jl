@@ -883,11 +883,45 @@ function dott(
 			s += b[snp] * t 
 		end
 	end
-#	println("snp exceeds x.p, s = $s, breaking...")
 	for snp = (x.p+1):(x.p+x.p2)
 		if indices[snp]
 			s += b[snp] * (x.x2t[snp-x.p,case] - means[snp]) * invstds[snp] 
-#			println("value of s is $s")
+		end
+	end
+
+	# return the dot product 
+	return s 
+end
+
+
+function dott(
+	x       :: BEDFile, 
+	b       :: DenseArray{Float32,1}, 
+	case    :: Int, 
+	indices :: BitArray{1}, 
+	means   :: DenseArray{Float32,1}, 
+	invstds :: DenseArray{Float32,1}
+) 
+	s = 0.0f0		# accumulation variable, will eventually equal dot(y,z)
+	t = 0.0f0		# store interpreted genotype
+	for snp = 1:x.p 
+
+		# if current index of b is FALSE, then skip it since it does not contribute to Xb
+		if indices[snp] 
+
+			# decompress genotype, this time from transposed matrix
+			t = getindex(x,x.xt,snp,case,x.tblocksize)
+
+			# handle exceptions on t
+			t = ifelse(isnan(t), 0.0f0, (t - means[snp]) * invstds[snp])
+
+			# accumulate dot product
+			s += b[snp] * t 
+		end
+	end
+	for snp = (x.p+1):(x.p+x.p2)
+		if indices[snp]
+			s += b[snp] * (x.x2t[snp-x.p,case] - means[snp]) * invstds[snp] 
 		end
 	end
 
