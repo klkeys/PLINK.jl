@@ -254,7 +254,7 @@ end
 function mean(T::Type, x::BEDFile; shared::Bool = true)
 
 	# enforce floating point type
-	T <: Union(Float32, Float64) || throw(ArgumentError("Type must be Float32 or Float64"))
+	@compat T <: Union{Float32, Float64} || throw(ArgumentError("Type must be Float32 or Float64"))
 
 	# initialize return vector
 	y = ifelse(shared, SharedArray(T, x.p + x.p2, init= S -> S[localindexes(S)] = zero(T)), zeros(T, x.p + x.p2))
