@@ -130,8 +130,8 @@ end
 	m_buff      :: cl.Buffer              = cl.Buffer(Float32, ctx, (:r,  :copy), hostbuf = sdata(means)),
 	p_buff      :: cl.Buffer              = cl.Buffer(Float32, ctx, (:r,  :copy), hostbuf = sdata(invstds)),
 	df_buff     :: cl.Buffer              = cl.Buffer(Float32, ctx, (:rw, :copy), hostbuf = sdata(df)),
-	red_buff    :: cl.Buffer              = cl.Buffer(Float32, ctx, (:rw), p + p2 * y_chunks),
-	xty_buff    :: cl.Buffer              = cl.Buffer(Float32, ctx, (:rw), p + p2), 
+	red_buff    :: cl.Buffer              = cl.Buffer(Float32, ctx, (:rw), x.p + p2 * y_chunks),
+	xty_buff    :: cl.Buffer              = cl.Buffer(Float32, ctx, (:rw), x.p + p2), 
 	genofloat   :: cl.LocalMem            = cl.LocalMem(Float32, wg_size)
 )	
 	XtY = SharedArray(Float32, x.p + x.p2, init = S -> S[localindexes(S)] = 0.0f0)
