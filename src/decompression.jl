@@ -151,7 +151,7 @@ function decompress_genotypes!(
 		end
 	else
 		@inbounds for case = 1:x.n
-			y[case] = x.x2[case,(snp-x.p)]
+			y[case] = (x.x2[case,(snp-x.p)] - m) * d
 		end
 	end
 	return nothing 
@@ -175,7 +175,7 @@ function decompress_genotypes!(
 		end
 	else
 		@inbounds for case = 1:x.n
-			y[case] = x.x2[case,(snp-x.p)]
+			y[case] = (x.x2[case,(snp-x.p)] - m) * d
 		end
 	end
 	return nothing 

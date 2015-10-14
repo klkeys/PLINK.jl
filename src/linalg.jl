@@ -113,11 +113,16 @@ function sumsq!(
 	@sync @inbounds @parallel for snp = 1:x.p
 		y[snp] = sumsq_snp(x,snp,means,invstds)
 	end
-	@inbounds for covariate = 1:x.p2
-		y[covariate] = zero(Float64) 
+	@sync @inbounds @parallel for covariate = 1:x.p2
+		t = zero(Float64)
+		s = zero(Float64)
+		m = means[x.p + covariate]
+		d = invstds[x.p + covariate]
 		@inbounds for row = 1:x.n
-			y[covariate] += x.x2[row,covariate]
+			t = (x.x2[row,covariate] - m) * d 
+			s += t*t 
 		end
+		y[x.p + covariate] = s
 	end
 
 	return nothing 
@@ -135,11 +140,16 @@ function sumsq!(
 	@sync @inbounds @parallel for snp = 1:x.p
 		y[snp] = sumsq_snp(x,snp,means,invstds)
 	end
-	@inbounds for covariate = 1:x.p2
-		y[covariate] = zero(Float32) 
+	@sync @inbounds @parallel for covariate = 1:x.p2
+		t = zero(Float32)
+		s = zero(Float32)
+		m = means[x.p + covariate]
+		d = invstds[x.p + covariate]
 		@inbounds for row = 1:x.n
-			y[covariate] += x.x2[row,covariate]
+			t = (x.x2[row,covariate] - m) * d 
+			s += t*t 
 		end
+		y[x.p + covariate] = s
 	end
 
 	return nothing 
@@ -158,10 +168,15 @@ function sumsq!(
 		y[snp] = sumsq_snp(x,snp,means,invstds)
 	end
 	@inbounds for covariate = 1:x.p2
-		y[covariate] = zero(Float64) 
+		t = zero(Float64)
+		s = zero(Float64)
+		m = means[x.p + covariate]
+		d = invstds[x.p + covariate]
 		@inbounds for row = 1:x.n
-			y[covariate] += x.x2[row,covariate]
+			t = (x.x2[row,covariate] - m) * d 
+			s += t*t 
 		end
+		y[x.p + covariate] = s
 	end
 
 	return nothing 
@@ -180,10 +195,15 @@ function sumsq!(
 		y[snp] = sumsq_snp(x,snp,means,invstds)
 	end
 	@inbounds for covariate = 1:x.p2
-		y[covariate] = zero(Float32) 
+		t = zero(Float32)
+		s = zero(Float32)
+		m = means[x.p + covariate]
+		d = invstds[x.p + covariate]
 		@inbounds for row = 1:x.n
-			y[covariate] += x.x2[row,covariate]
+			t = (x.x2[row,covariate] - m) * d 
+			s += t*t 
 		end
+		y[x.p + covariate] = s
 	end
 
 	return nothing 
@@ -201,16 +221,29 @@ end
 #
 # coded by Kevin L. Keys (2015)
 # klkeys@g.ucla.edu
+#function sumsq(
+#	x       :: BEDFile; 
+#	shared  :: Bool = true, 
+#	means   :: DenseArray{Float64,1} = mean(Float64, x, shared=shared), 
+#	invstds :: DenseArray{Float64,1} = invstd(x,means, shared=shared)
+#) 
+#	y = ifelse(shared, SharedArray(Float64, x.p + x.p2, init= S -> S[localindexes(S)] = 0.0), zeros(Float64, x.p + x.p2))
+#	sumsq!(y,x,means,invstds)
+#	return y
+#end
+
 function sumsq(
+	T       :: Type,
 	x       :: BEDFile; 
 	shared  :: Bool = true, 
-	means   :: DenseArray{Float64,1} = mean(Float64, x, shared=shared), 
-	invstds :: DenseArray{Float64,1} = invstd(x,means, shared=shared)
+	means   :: DenseVector = mean(T, x, shared=shared), 
+	invstds :: DenseVector = invstd(x,means, shared=shared)
 ) 
-	y = ifelse(shared, SharedArray(Float64, x.p + x.p2, init= S -> S[localindexes(S)] = 0.0), zeros(Float64, x.p + x.p2))
+	y = ifelse(shared, SharedArray(T, x.p + x.p2, init = S -> S[localindexes(S)] = zero(T)), zeros(T, x.p + x.p2))
 	sumsq!(y,x,means,invstds)
 	return y
 end
+
 
 
 #function sumsq(
