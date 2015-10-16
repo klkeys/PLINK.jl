@@ -56,8 +56,8 @@ function sumsq_snp(
 	means   :: DenseArray{Float64,1}, 
 	invstds :: DenseArray{Float64,1}
 ) 
-	s = zero(Float64)	# accumulation variable, will eventually equal dot(y,z)
-	t = zero(Float64) # temp variable, output of interpret_genotype
+	s = 0.0		# accumulation variable, will eventually equal dot(y,z)
+	t = 0.0		# temp variable, output of interpret_genotype
 	m = means[snp]
 	d = invstds[snp]
 
@@ -78,8 +78,8 @@ function sumsq_snp(
 	means   :: DenseArray{Float32,1}, 
 	invstds :: DenseArray{Float32,1}
 ) 
-	s = zero(Float32)	# accumulation variable, will eventually equal dot(y,z)
-	t = zero(Float32) # temp variable, output of interpret_genotype
+	s = 0.0f0	# accumulation variable, will eventually equal dot(y,z)
+	t = 0.0f0 	# temp variable, output of interpret_genotype
 	m = means[snp]
 	d = invstds[snp]
 
@@ -92,6 +92,48 @@ function sumsq_snp(
 
 	return s
 end
+
+function sumsq_covariate(
+	x         :: BEDFile, 
+	covariate :: Int, 
+	means     :: DenseArray{Float64,1}, 
+	invstds   :: DenseArray{Float64,1}
+) 
+	t = 0.0 
+	s = 0.0 
+	m = means[x.p + covariate]
+	d = invstds[x.p + covariate]
+
+	# loop over all n individuals
+	@inbounds for case = 1:x.n
+		t = (x.x2[case,covariate] - m) * d 
+		s += t*t 
+	end
+
+	return s
+end
+
+function sumsq_covariate(
+	x         :: BEDFile, 
+	covariate :: Int, 
+	means     :: DenseArray{Float32,1}, 
+	invstds   :: DenseArray{Float32,1}
+) 
+	t = 0.0f0 
+	s = 0.0f0 
+	m = means[x.p + covariate]
+	d = invstds[x.p + covariate]
+
+	# loop over all n individuals
+	@inbounds for case = 1:x.n
+		t = (x.x2[case,covariate] - m) * d 
+		s += t*t 
+	end
+
+	return s
+end
+
+
 
 # SQUARED EUCLIDEAN NORM OF COLUMNS OF A COMPRESSED MATRIX 
 #
@@ -114,21 +156,11 @@ function sumsq!(
 		y[snp] = sumsq_snp(x,snp,means,invstds)
 	end
 	@sync @inbounds @parallel for covariate = 1:x.p2
-		t = zero(Float64)
-		s = zero(Float64)
-		m = means[x.p + covariate]
-		d = invstds[x.p + covariate]
-		@inbounds for row = 1:x.n
-			t = (x.x2[row,covariate] - m) * d 
-			s += t*t 
-		end
-		y[x.p + covariate] = s
+		y[x.p + covariate] = sumsq_covariate(x,covariate,means,invstds) 
 	end
 
 	return nothing 
 end
-
-
 
 function sumsq!(
 	y       :: SharedArray{Float32,1}, 
@@ -141,15 +173,7 @@ function sumsq!(
 		y[snp] = sumsq_snp(x,snp,means,invstds)
 	end
 	@sync @inbounds @parallel for covariate = 1:x.p2
-		t = zero(Float32)
-		s = zero(Float32)
-		m = means[x.p + covariate]
-		d = invstds[x.p + covariate]
-		@inbounds for row = 1:x.n
-			t = (x.x2[row,covariate] - m) * d 
-			s += t*t 
-		end
-		y[x.p + covariate] = s
+		y[x.p + covariate] = sumsq_covariate(x,covariate,means,invstds) 
 	end
 
 	return nothing 
@@ -168,15 +192,7 @@ function sumsq!(
 		y[snp] = sumsq_snp(x,snp,means,invstds)
 	end
 	@inbounds for covariate = 1:x.p2
-		t = zero(Float64)
-		s = zero(Float64)
-		m = means[x.p + covariate]
-		d = invstds[x.p + covariate]
-		@inbounds for row = 1:x.n
-			t = (x.x2[row,covariate] - m) * d 
-			s += t*t 
-		end
-		y[x.p + covariate] = s
+		y[x.p + covariate] = sumsq_covariate(x,covariate,means,invstds) 
 	end
 
 	return nothing 
@@ -195,15 +211,7 @@ function sumsq!(
 		y[snp] = sumsq_snp(x,snp,means,invstds)
 	end
 	@inbounds for covariate = 1:x.p2
-		t = zero(Float32)
-		s = zero(Float32)
-		m = means[x.p + covariate]
-		d = invstds[x.p + covariate]
-		@inbounds for row = 1:x.n
-			t = (x.x2[row,covariate] - m) * d 
-			s += t*t 
-		end
-		y[x.p + covariate] = s
+		y[x.p + covariate] = sumsq_covariate(x,covariate,means,invstds) 
 	end
 
 	return nothing 
@@ -221,17 +229,6 @@ end
 #
 # coded by Kevin L. Keys (2015)
 # klkeys@g.ucla.edu
-#function sumsq(
-#	x       :: BEDFile; 
-#	shared  :: Bool = true, 
-#	means   :: DenseArray{Float64,1} = mean(Float64, x, shared=shared), 
-#	invstds :: DenseArray{Float64,1} = invstd(x,means, shared=shared)
-#) 
-#	y = ifelse(shared, SharedArray(Float64, x.p + x.p2, init= S -> S[localindexes(S)] = 0.0), zeros(Float64, x.p + x.p2))
-#	sumsq!(y,x,means,invstds)
-#	return y
-#end
-
 function sumsq(
 	T       :: Type,
 	x       :: BEDFile; 
@@ -243,32 +240,6 @@ function sumsq(
 	sumsq!(y,x,means,invstds)
 	return y
 end
-
-
-
-#function sumsq(
-#	x       :: BEDFile; 
-#	shared  :: Bool = true, 
-#	means   :: DenseArray{Float32,1} = mean(Float32, x, shared=shared), 
-#	invstds :: DenseArray{Float32,1} = invstd(x,means, shared=shared)
-#) 
-#	y = ifelse(shared, SharedArray(Float32, x.p + x.p2, init = S -> S[localindexes(S)] = 0.0f0), zeros(Float32, x.p + x.p2))
-#	sumsq!(y,x,means,invstds)
-#	return y
-#end
-
-
-#function sumsq(
-#	T       :: Type,
-#	x       :: BEDFile; 
-#	shared  :: Bool = true, 
-#	means   :: DenseArray{T,1} = mean(T, x, shared=shared), 
-#	invstds :: DenseArray{T,1} = invstd(x,means, shared=shared)
-#) 
-#	y = ifelse(shared, SharedArray(T, x.p + x.p2, init = S -> S[localindexes(S)] = zero(T)), zeros(T, x.p + x.p2))
-#	sumsq!(y,x,means,invstds)
-#	return y
-#end
 
 
 # MEAN OF COLUMNS OF A COMPRESSED MATRIX
@@ -302,8 +273,8 @@ function mean(T::Type, x::BEDFile; shared::Bool = true)
 		end
 	end
 	for i = 1:x.p2 
-		for j = 1:x.n
-			@inbounds y[x.p + i] += x.x2[j,i]
+		@inbounds for j = 1:x.n
+			y[x.p + i] += x.x2[j,i]
 		end
 		y[i] /= x.n
 	end
@@ -315,8 +286,6 @@ end
 mean(x::BEDFile; shared::Bool = true) = mean(Float64, x, shared=shared)
 
 function mean_col(T::Type, x::BEDFile, snp::Int)
-#	i = 1		# count number of people
-#	j = 1		# count number of bytes 
 	s = zero(T)	# accumulation variable, will eventually equal mean(x,col) for current col 
 	t = zero(T) # temp variable, output of interpret_genotype
 	u = zero(T)	# count the number of people
@@ -356,8 +325,6 @@ mean_col(x::BEDFile, snp::Int) = mean_col(Float64, x, snp)
 # klkeys@g.ucla.edu
 #
 ### WARNING: need to fix type assertions here!
-#function invstd(T::Type, x::BEDFile; shared::Bool = true, y::DenseArray{T,1} = mean(T,x, shared=shared))
-#function invstd(T::Type, x::BEDFile; shared::Bool = true, y::DenseArray{FloatingPoint,1} = mean(T,x, shared=shared))
 function invstd(x::BEDFile, means::DenseArray{Float64,1}; shared::Bool = true) 
 
 	# initialize return vector
@@ -489,7 +456,7 @@ function update_partial_residuals!(
 	length(r) == x.n || throw(DimensionMismatch("r must have length $(x.n)!"))
 	length(y) == x.n || throw(DimensionMismatch("y must have length $(x.n)!"))
 
-	@sync @inbounds @parallel for i = 1:x.n
+	@inbounds for i = 1:x.n
 		r[i] = y[i] - Xb[i]
 	end
 	return nothing 
@@ -510,7 +477,7 @@ function update_partial_residuals!(
 	length(r) == x.n || throw(DimensionMismatch("r must have length $(x.n)!"))
 	length(y) == x.n || throw(DimensionMismatch("y must have length $(x.n)!"))
 
-	@sync @inbounds @parallel for i = 1:x.n
+	@inbounds for i = 1:x.n
 		r[i] = y[i] - Xb[i]
 	end
 
@@ -533,7 +500,7 @@ function update_partial_residuals!(
 	length(r) == x.n || throw(DimensionMismatch("r must have length $(x.n)!"))
 	length(y) == x.n || throw(DimensionMismatch("y must have length $(x.n)!"))
 
-	@sync @inbounds @parallel for i = 1:x.n
+	@inbounds for i = 1:x.n
 		r[i] = y[i] - Xb[i]
 	end
 
@@ -749,148 +716,6 @@ end
 #
 # coded by Kevin L. Keys (2015)
 # klkeys@g.ucla.edu
-#function dott(
-#	x       :: BEDFile, 
-#	b       :: DenseArray{Float64,1}, 
-#	case    :: Int, 
-#	indices :: BitArray{1}, 
-#	means   :: DenseArray{Float64,1}, 
-#	invstds :: DenseArray{Float64,1}
-#) 
-#	snp = 1
-#	j = 1
-#	k = 0
-#	s = 0.0		# accumulation variable, will eventually equal dot(y,z)
-#	t = 0.0		# store interpreted genotype
-#	while snp <= x.p 
-#
-#		# if current index of b is FALSE, then skip it since it does not contribute to Xb
-#		if indices[snp] 
-#			genotype_block = x.xt[(case-1)*x.tblocksize + j]
-#			genotype       = (genotype_block >>> k) & THREE8
-#			t              = geno64[genotype + ONE8]
-#
-#			# handle exceptions on t
-#			t = ifelse(isnan(t), 0.0, (t - means[snp]) * invstds[snp])
-#
-#			# accumulate dot product
-#			s += b[snp] * t 
-#
-#			# increment snp counter
-#			snp += 1 
-#
-#			# if we are at last snp, then return 
-##			snp > x.p && return s 
-#			snp > x.p && println("snp exceeds x.p, s = $s, breaking...")
-#			snp > x.p && break 
-#
-#			# by this point, we are not done yet,
-#			# so we increment bitshift by two
-#			k += 2
-#
-#			# if bitshift exceeds end of byte,
-#			# then reset bitshift and proceed to next byte
-#			if k > 6
-#				k  = 0
-#				j += 1
-#			end
-#		else
-#
-#			# in this case, the snp is not indexed
-#			# no math necessary, only need to track indices
-#			snp += 1
-##			snp > x.p && return s 
-#			snp > x.p && println("snp exceeds x.p, s = $s, breaking...")
-#			snp > x.p && break 
-#			k += 2
-#			if k > 6
-#				k  = 0
-#				j += 1
-#			end
-#		end
-#	end
-#	for snp2 = (x.p+1):(x.p+x.p2)
-#		if indices[snp2]
-##			s += b[snp2] * (x.x2t[snp2-x.p,case] - means[snp2]) * invstds[snp2] 
-#			s += b[snp2] * x.x2t[snp2-x.p,case]
-#			println("value of s is $s")
-#		end
-#	end
-#
-#	# return the dot product 
-#	return s 
-#end
-#
-#function dott(
-#	x       :: BEDFile, 
-#	b       :: DenseArray{Float32,1}, 
-#	case    :: Int, 
-#	indices :: BitArray{1}, 
-#	means   :: DenseArray{Float32,1}, 
-#	invstds :: DenseArray{Float32,1}
-#) 
-#	snp = 1
-#	j = 1
-#	k = 0
-#	s = 0.0		# accumulation variable, will eventually equal dot(y,z)
-#	t = 0.0		# store interpreted genotype
-#	while snp <= x.p 
-#
-#		# if current index of b is FALSE, then skip it since it does not contribute to Xb
-#		if indices[snp] 
-#			genotype_block = x.xt[(case-1)*x.tblocksize + j]
-#			genotype       = (genotype_block >>> k) & THREE8
-#			t              = geno32[genotype + ONE8]
-#
-#			# handle exceptions on t
-#			t = ifelse(isnan(t), 0.0f0, (t - means[snp]) * invstds[snp])
-#
-#			# accumulate dot product
-#			s += b[snp] * t 
-#
-#			# increment snp counter
-#			snp += 1 
-#
-#			# if we are at last snp, then return 
-##			snp > x.p && return s 
-#			snp > x.p && break 
-#
-#			# by this point, we are not done yet,
-#			# so we increment bitshift by two
-#			k += 2
-#
-#			# if bitshift exceeds end of byte,
-#			# then reset bitshift and proceed to next byte
-#			if k > 6
-#				k  = 0
-#				j += 1
-#			end
-#		else
-#
-#			# in this case, the snp is not indexed
-#			# no math necessary, only need to track indices
-#			snp += 1
-##			snp > x.p && return s 
-#			snp > x.p && break 
-#			k += 2
-#			if k > 6
-#				k  = 0
-#				j += 1
-#			end
-#		end
-#	end
-#	@inbounds for snp2 = (x.p+1):(x.p+x.p2)
-#		if indices[snp2]
-#			s += b[snp2] * (x.x2t[snp2-x.p,case] - means[snp2]) * invstds[snp2] 
-#		end
-#	end
-#
-#	# return the dot product 
-#	return s 
-#end
-
-
-
 function dott(
 	x       :: BEDFile, 
 	b       :: DenseArray{Float64,1}, 
@@ -901,7 +726,7 @@ function dott(
 ) 
 	s = 0.0		# accumulation variable, will eventually equal dot(y,z)
 	t = 0.0		# store interpreted genotype
-	for snp = 1:x.p 
+	@inbounds for snp = 1:x.p 
 
 		# if current index of b is FALSE, then skip it since it does not contribute to Xb
 		if indices[snp] 
@@ -916,7 +741,7 @@ function dott(
 			s += b[snp] * t 
 		end
 	end
-	for snp = (x.p+1):(x.p+x.p2)
+	@inbounds for snp = (x.p+1):(x.p+x.p2)
 		if indices[snp]
 			s += b[snp] * (x.x2t[snp-x.p,case] - means[snp]) * invstds[snp] 
 		end
@@ -937,7 +762,7 @@ function dott(
 ) 
 	s = 0.0f0		# accumulation variable, will eventually equal dot(y,z)
 	t = 0.0f0		# store interpreted genotype
-	for snp = 1:x.p 
+	@inbounds for snp = 1:x.p 
 
 		# if current index of b is FALSE, then skip it since it does not contribute to Xb
 		if indices[snp] 
@@ -952,7 +777,7 @@ function dott(
 			s += b[snp] * t 
 		end
 	end
-	for snp = (x.p+1):(x.p+x.p2)
+	@inbounds for snp = (x.p+1):(x.p+x.p2)
 		if indices[snp]
 			s += b[snp] * (x.x2t[snp-x.p,case] - means[snp]) * invstds[snp] 
 		end
@@ -961,8 +786,6 @@ function dott(
 	# return the dot product 
 	return s 
 end
-
-
 
 
 # PERFORM X * BETA
@@ -999,7 +822,6 @@ function xb!(
 
 	# loop over the desired number of predictors 
 	@sync @inbounds @parallel for case = 1:x.n
-#	@inbounds for case = 1:x.n
 		Xb[case] = dott(x, b, case, indices, means, invstds)	
 	end
 
