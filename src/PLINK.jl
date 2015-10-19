@@ -1,7 +1,6 @@
 module PLINK
 
 using StatsBase: logistic, softplus 
-using Compat
 using OpenCL
 
 import Base.size 

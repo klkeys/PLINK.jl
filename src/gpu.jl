@@ -2,7 +2,7 @@
 cl = OpenCL
 
 # this subroutine calculates the gradient for the nongenetic covariates in BEDFile x.
-@compat function df_x2!(
+function df_x2!(
 	snp     :: Int, 
 	df      :: DenseArray{Float32,1}, 
 	x       :: DenseArray{Float32,2}, 
@@ -22,7 +22,7 @@ cl = OpenCL
 end
 
 # call this function with a configured GPU command queue
-@compat function xty!(
+function xty!(
 	df          :: SharedArray{Float32,1}, 
 	df_buff     :: cl.Buffer, 
 	x           :: BEDFile, 
@@ -62,7 +62,7 @@ end
 end
 
 
-@compat function xty!(
+function xty!(
 	df          :: Array{Float32,1}, 
 	df_buff     :: cl.Buffer, 
 	x           :: BEDFile, 
@@ -101,7 +101,7 @@ end
 	return nothing
 end
 
-@compat function xty(
+function xty(
 	x           :: BEDFile, 
 	y           :: SharedArray{Float32,1},
 	kernfile    :: ASCIIString; 
@@ -141,7 +141,7 @@ end
 
 # wrapper for xty!
 # for optimal performance, call this function with a configured GPU command queue
-@compat function xty(
+function xty(
 	x           :: BEDFile, 
 	y           :: Array{Float32,1},
 	kernfile    :: ASCIIString; 
