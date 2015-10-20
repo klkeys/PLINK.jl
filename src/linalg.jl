@@ -272,11 +272,11 @@ function mean(T::Type, x::BEDFile; shared::Bool = true)
 			y[snp] = mean_col(T,x,snp)
 		end
 	end
-	for i = 1:x.p2 
+	@inbounds for i = 1:x.p2 
 		@inbounds for j = 1:x.n
 			y[x.p + i] += x.x2[j,i]
 		end
-		y[i] /= x.n
+		y[x.p + i] /= x.n
 	end
 
 	return y
@@ -339,11 +339,11 @@ function invstd(x::BEDFile, means::DenseArray{Float64,1}; shared::Bool = true)
 			z[snp] = invstd_col(Float64, x, snp, means)
 		end
 	end
-	for i = 1:x.p2 
-		for j = 1:x.n
-			@inbounds z[x.p + i] += (x.x2[j,i] - means[x.p + i])^2
+	@inbounds for i = 1:x.p2 
+		@inbounds for j = 1:x.n
+			z[x.p + i] += (x.x2[j,i] - means[x.p + i])^2
 		end
-		z[i] /= x.n
+		z[x.p + i] /= x.n
 	end
 
 	return z
@@ -363,11 +363,11 @@ function invstd(x::BEDFile, means::DenseArray{Float32,1}; shared::Bool = true)
 			z[snp] = invstd_col(Float32, x, snp, means)
 		end
 	end
-	for i = 1:x.p2 
-		for j = 1:x.n
-			@inbounds z[x.p + i] += (x.x2[j,i] - means[x.p + i])^2
+	@inbounds for i = 1:x.p2 
+		@inbounds for j = 1:x.n
+			z[x.p + i] += (x.x2[j,i] - means[x.p + i])^2
 		end
-		z[i] /= x.n
+		z[x.p + i] /= x.n
 	end
 
 	return z
