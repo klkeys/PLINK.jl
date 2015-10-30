@@ -2,7 +2,6 @@
     #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 #endif
 #define NVIDIA_WARP_SIZE 32 
-//#define MAPPING  __local double mapping[4]; mapping[0]=0.0l; mapping[1]=9.0l; mapping[2]=1.0l; mapping[3]=2.0l;
 #define MAPPING  __local double mapping[4]; mapping[0]=0.0; mapping[1]=9.0; mapping[2]=1.0; mapping[3]=2.0;
 
 __kernel void reset_x(
@@ -30,6 +29,7 @@ __kernel void compute_xt_times_vector(
 	__global const double * vec,
 	__global const double * means,
 	__global const double * precisions,
+	__global const long * mask_n,
 	__local  double * local_floatgeno
 ){
 	// initialize lookup table
@@ -45,7 +45,6 @@ __kernel void compute_xt_times_vector(
 	double precision = precisions[snp];
 
 	// initialize values of floating point and compressed genotype arrays
-//    local_floatgeno[threadindex] = 0.0l;
     local_floatgeno[threadindex] = 0.0;
 
     // synchronize threads in local workgroup
@@ -73,8 +72,7 @@ __kernel void compute_xt_times_vector(
         // if missing then set to 0.0, otherwise standardize on fly using mean and precision
 		// in this process, will multiply against value at correct index of vector
 		// in essence, this is the X'*y part
-//        local_floatgeno[threadindex] = local_floatgeno[threadindex] == 9.0l ? 0.0l : (local_floatgeno[threadindex] - mean) * precision * vec[subject_index];
-        local_floatgeno[threadindex] = local_floatgeno[threadindex] == 9.0 ? 0.0 : (local_floatgeno[threadindex] - mean) * precision * vec[subject_index];
+        local_floatgeno[threadindex] = (local_floatgeno[threadindex] == 9.0 || mask_n[subject_index] == 0) ? 0.0 : (local_floatgeno[threadindex] - mean) * precision * vec[subject_index];
 	
         // synchronize threads in local workgroup
         barrier(CLK_LOCAL_MEM_FENCE);
@@ -111,7 +109,6 @@ __kernel void reduce_xt_vec_chunks(
     int threadindex = get_local_id(0);
 
 	// initialize local memory array with components equal to 0.0 
-//    local_xt[threadindex] = 0.0l;
     local_xt[threadindex] = 0.0;
 
     // synchronize threads in local workgroup

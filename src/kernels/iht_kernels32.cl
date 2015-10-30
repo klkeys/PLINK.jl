@@ -1,17 +1,18 @@
 #define NVIDIA_WARP_SIZE 32 
-#define MAPPING  __local float mapping[4]; mapping[0]=0.0f; mapping[1]=9.0f; mapping[2]=1.0f; mapping[3]=2.0f;
+#define MAPPING  __local float mapping[4]; mapping[0]=0.0; mapping[1]=9.0; mapping[2]=1.0; mapping[3]=2.0;
 
-
-
-// extract genotype from a byte 
-inline float c2g(
-    char c,
-    int shifts,
-    __local float * mapping
-){
-    int val  = (((int)c)>>shifts) & 3;
-    return mapping[val];
+__kernel void reset_x(
+	__global float * x, 
+	const int n, 
+	const float val
+) {
+	int i = get_global_id(0);
+	if (i < n){
+		x[i] = val; 
+	}
+	return;
 }
+
 
 
 __kernel void compute_xt_times_vector(
@@ -25,7 +26,7 @@ __kernel void compute_xt_times_vector(
 	__global const float * vec,
 	__global const float * means,
 	__global const float * precisions,
-//	__local  char * local_packedgeno,
+	__global const long * mask_n,
 	__local  float * local_floatgeno
 ){
 	// initialize lookup table
@@ -41,8 +42,7 @@ __kernel void compute_xt_times_vector(
 	float precision = precisions[snp];
 
 	// initialize values of floating point and compressed genotype arrays
-    local_floatgeno[threadindex] = 0.0f;
-//	local_packedgeno[threadindex] = (char) 0;
+    local_floatgeno[threadindex] = 0.0;
 
     // synchronize threads in local workgroup
 	barrier(CLK_LOCAL_MEM_FENCE);
@@ -69,7 +69,9 @@ __kernel void compute_xt_times_vector(
         // if missing then set to 0.0, otherwise standardize on fly using mean and precision
 		// in this process, will multiply against value at correct index of vector
 		// in essence, this is the X'*y part
-        local_floatgeno[threadindex] = local_floatgeno[threadindex] == 9.0f ? 0.0f : (local_floatgeno[threadindex] - mean) * precision * vec[subject_index];
+		// mask_n permits us to skip certain subjects from computations (fill with 0.0)
+		// this is important in crossvalidation schemes
+        local_floatgeno[threadindex] = (local_floatgeno[threadindex] == 9.0 || mask_n[subject_index] == 0) ? 0.0 : (local_floatgeno[threadindex] - mean) * precision * vec[subject_index];
 	
         // synchronize threads in local workgroup
         barrier(CLK_LOCAL_MEM_FENCE);
@@ -106,7 +108,7 @@ __kernel void reduce_xt_vec_chunks(
     int threadindex = get_local_id(0);
 
 	// initialize local memory array with components equal to 0.0 
-    local_xt[threadindex] = 0.0f;
+    local_xt[threadindex] = 0.0;
 
     // synchronize threads in local workgroup
     barrier(CLK_LOCAL_MEM_FENCE);

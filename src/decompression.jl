@@ -445,7 +445,141 @@ function decompress_genotypes!(
 		end
 	end 
 	return nothing 
+end
 
+
+
+
+
+function decompress_genotypes!(
+	Y       :: DenseArray{Float64,2}, 
+	x       :: BEDFile, 
+	indices :: BitArray{1},
+	mask_n  :: DenseArray{Int,1}; 
+	means   :: DenseArray{Float64,1} = mean(Float64,x),
+	invstds :: DenseArray{Float64,1} = invstd(x,means)
+)
+
+	# get dimensions of matrix to fill 
+	const (n,p) = size(Y)
+	const xn = x.n 
+	const xp = size(x,2) 
+
+	# ensure dimension compatibility
+	n <= xn            || throw(DimensionMismatch("column dimension of of Y exceeds column dimension of uncompressed x"))
+	n == length(mask_n)   || throw(DimensionMismatch("bitmask mask_n indexes different number of columns than column dimension of Y"))
+	p <= xp            || throw(DimensionMismatch("Y has more columns than x"))
+	sum(indices) <= xp || throw(DimensionMismatch("Vector 'indices' indexes more columns than are available in Y"))
+
+	# counter to ensure that we do not attempt to overfill Y
+	current_col = 0
+
+	quiet = true 
+	@inbounds for snp = 1:xp
+
+		# use this column?
+		if indices[snp]
+
+			# add to counter
+			current_col += 1
+			quiet || println("filling current column $current_col with snp $snp")
+
+			# extract column mean, inv std
+			m = means[snp]
+			d = invstds[snp]
+
+			if snp <= x.p
+				@inbounds for case = 1:n
+					if mask_n[case] == 1
+						t = getindex(x,x.x,case,snp,x.blocksize)
+						Y[case,current_col] = ifelse(isnan(t), 0.0, (t - m)*d)
+						quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
+					else
+						Y[case,current_col] = 0.0
+					end
+				end
+			else
+				@inbounds for case = 1:n
+					if mask_n[case] == 1
+						Y[case,current_col] = (x.x2[case,(snp-x.p)] - m) * d
+						quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
+					else
+						Y[case,current_col] = 0.0
+					end
+				end
+			end
+
+			# quit when Y is filled
+			current_col == p && return nothing 
+		end
+	end 
+	return nothing 
+end
+
+
+function decompress_genotypes!(
+	Y       :: DenseArray{Float32,2}, 
+	x       :: BEDFile, 
+	indices :: BitArray{1},
+	mask_n  :: DenseArray{Int,1}; 
+	means   :: DenseArray{Float32,1} = mean(Float32,x),
+	invstds :: DenseArray{Float32,1} = invstd(x,means)
+)
+
+	# get dimensions of matrix to fill 
+	const (n,p) = size(Y)
+	const xn = x.n 
+	const xp = size(x,2) 
+
+	# ensure dimension compatibility
+	n <= xn            || throw(DimensionMismatch("column dimension of of Y exceeds column dimension of uncompressed x"))
+	n == length(mask_n)   || throw(DimensionMismatch("bitmask mask_n indexes different number of columns than column dimension of Y"))
+	p <= xp            || throw(DimensionMismatch("Y has more columns than x"))
+	sum(indices) <= xp || throw(DimensionMismatch("Vector 'indices' indexes more columns than are available in Y"))
+
+	# counter to ensure that we do not attempt to overfill Y
+	current_col = 0
+
+	quiet = true 
+	@inbounds for snp = 1:xp
+
+		# use this column?
+		if indices[snp]
+
+			# add to counter
+			current_col += 1
+			quiet || println("filling current column $current_col with snp $snp")
+
+			# extract column mean, inv std
+			m = means[snp]
+			d = invstds[snp]
+
+			if snp <= x.p
+				@inbounds for case = 1:n
+					if mask_n[case] == 1
+						t = getindex(x,x.x,case,snp,x.blocksize, float32=true)
+						Y[case,current_col] = ifelse(isnan(t), 0.0f0, (t - m)*d)
+						quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
+					else
+						Y[case,current_col] = 0.0f0
+					end
+				end
+			else
+				@inbounds for case = 1:n
+					if mask_n[case] == 1
+						Y[case,current_col] = (x.x2[case,(snp-x.p)] - m) * d
+						quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
+					else
+						Y[case,current_col] = 0.0f0
+					end
+				end
+			end
+
+			# quit when Y is filled
+			current_col == p && return nothing 
+		end
+	end 
+	return nothing 
 end
 
 
