@@ -185,7 +185,7 @@ copy(x::BEDFile) = BEDFile(x.x, x.xt, x.n, x.p, x.blocksize, x.tblocksize, x.x2,
 
 isequal(x::BEDFile, y::BEDFile) = x == y 
 
-function addx2!(x::BEDFile, x2::DenseArray{Float64,2}; pids::DenseVector{Int} = procs())
+function addx2!(x::BEDFile, x2::DenseMatrix{Float64}; pids::DenseVector{Int} = procs())
 	(n,p2) = size(x2)
 	n == x.n || throw(DimensionMismatch("x2 has $n rows but should have $(x.n) of them"))
 	x.p2 = p2
@@ -203,7 +203,7 @@ function addx2!(x::BEDFile, x2::DenseArray{Float64,2}; pids::DenseVector{Int} = 
 end
 
 
-function addx2!(x::BEDFile, x2::DenseArray{Float32,2}; pids::DenseVector{Int} = procs())
+function addx2!(x::BEDFile, x2::DenseMatrix{Float32}; pids::DenseVector{Int} = procs())
 	(n,p2) = size(x2)
 	n == x.n || throw(DimensionMismatch("x2 has $n rows but should have $(x.n) of them"))
 	x.p2 = p2

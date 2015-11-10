@@ -746,7 +746,7 @@ function dot(
 	snp     :: Int, 
 	means   :: DenseVector{Float32}, 
 	invstds :: DenseVector{Float32},
-	mask_n  :: DenseArray{1}
+	mask_n  :: DenseVector{Int}
 ) 
 	s = 0.0f0			# accumulation variable, will eventually equal dot(y,z)
 	m = means[snp]		# mean of SNP predictor

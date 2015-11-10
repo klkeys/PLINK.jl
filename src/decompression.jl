@@ -29,7 +29,7 @@
 # it becomes useful for accessing nongenetic covariates
 function getindex(
 	X         :: BEDFile, 
-	x         :: DenseArray{Int8,1}, 
+	x         :: DenseVector{Int8}, 
 	row       :: Int, 
 	col       :: Int, 
 	blocksize :: Int; 
@@ -274,10 +274,10 @@ end
 
 
 function decompress_genotypes!(
-	Y       :: DenseMatrix{Float32}, 
-	x       :: BEDFile; 
-	means   :: DenseVector{Float32} = mean(Float32,x), 
-	invstds :: DenseVector{Float32} = invstd(x,means),
+	Y           :: DenseMatrix{Float32}, 
+	x           :: BEDFile; 
+	means       :: DenseVector{Float32} = mean(Float32,x), 
+	invstds     :: DenseVector{Float32} = invstd(x,means),
 	standardize :: Bool = true
 #	pids        :: DenseVector{Int} = procs()
 ) 
@@ -447,7 +447,7 @@ function decompress_genotypes!(
 	Y       :: DenseMatrix{Float64}, 
 	x       :: BEDFile, 
 	indices :: BitArray{1},
-	mask_n  :: DenseArray{Int,1}; 
+	mask_n  :: DenseVector{Int}; 
 	means   :: DenseVector{Float64} = mean(Float64,x),
 	invstds :: DenseVector{Float64} = invstd(x,means)
 )
@@ -513,7 +513,7 @@ function decompress_genotypes!(
 	Y       :: DenseMatrix{Float32}, 
 	x       :: BEDFile, 
 	indices :: BitArray{1},
-	mask_n  :: DenseArray{Int,1}; 
+	mask_n  :: DenseVector{Int}; 
 	means   :: DenseVector{Float32} = mean(Float32,x),
 	invstds :: DenseVector{Float32} = invstd(x,means)
 )
@@ -595,7 +595,7 @@ end
 function decompress_genotypes!(
 	Y       :: DenseMatrix{Float64}, 
 	x       :: BEDFile, 
-	indices :: DenseArray{Int,1}; 
+	indices :: DenseVector{Int}; 
 	means   :: DenseVector{Float64} = mean(Float64,x), 
 	invstds :: DenseVector{Float64} = invstd(x,means)
 )
@@ -646,7 +646,7 @@ end
 function decompress_genotypes!(
 	Y       :: DenseMatrix{Float32}, 
 	x       :: BEDFile, 
-	indices :: DenseArray{Int,1}; 
+	indices :: DenseVector{Int}; 
 	means   :: DenseVector{Float32} = mean(Float32,x), 
 	invstds :: DenseVector{Float32} = invstd(x,means)
 )

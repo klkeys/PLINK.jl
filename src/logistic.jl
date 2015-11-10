@@ -20,7 +20,7 @@
 #
 # coded by Kevin L. Keys (2015)
 # klkeys@g.ucla.edu
-function update_residuals!(r::DenseArray{Float64,1}, x::BEDFile, y::DenseArray{Float64,1}, b::DenseArray{Float64,1}, perm::DenseArray{Int,1}, w::DenseArray{Float64,1}, k::Int; Xb::DenseArray{Float64,1} = xb(x,b,perm,k), n::Int = length(y), p::Int = length(b))
+function update_residuals!(r::DenseVector{Float64}, x::BEDFile, y::DenseVector{Float64}, b::DenseVector{Float64}, perm::DenseVector{Int}, w::DenseVector{Float64}, k::Int; Xb::DenseVector{Float64} = xb(x,b,perm,k), n::Int = length(y), p::Int = length(b))
     (n,p) == size(x) || throw(DimensionMismatch("update_residuals!: nonconformable arguments!"))
 
     @sync @inbounds @parallel for i = 1:n 
@@ -54,7 +54,7 @@ end
 #
 # coded by Kevin L. Keys (2015)
 # klkeys@g.ucla.edu
-function update_weights!(w::DenseArray{Float64,1}, x::BEDFile, b::DenseArray{Float64,1}, perm::DenseArray{Int,1}, k::Int; Xb::DenseArray{Float64,1} = xb(x,b,perm,k), n::Int = length(w), p::Int = length(b))
+function update_weights!(w::DenseVector{Float64}, x::BEDFile, b::DenseVector{Float64}, perm::DenseVector{Int}, k::Int; Xb::DenseVector{Float64} = xb(x,b,perm,k), n::Int = length(w), p::Int = length(b))
     (n,p) == size(x) || throw(DimensionMismatch("update_weights!: nonconformable arguments!"))
 
     @sync @inbounds @parallel for i = 1:n 
@@ -80,7 +80,7 @@ end
 #
 # coded by Kevin L. Keys (2015)
 # klkeys@g.ucla.edu
-function compute_loglik(y::DenseArray{Float64,1}, x::BEDFile, b::DenseArray{Float64,1}, perm::DenseArray{Int,1}, k::Int; n::Int = length(y), Xb::DenseArray{Float64,1} = xb(x,b,perm,k), p::Int = length(b))
+function compute_loglik(y::DenseVector{Float64}, x::BEDFile, b::DenseVector{Float64}, perm::DenseVector{Int}, k::Int; n::Int = length(y), Xb::DenseVector{Float64} = xb(x,b,perm,k), p::Int = length(b))
     n == length(xb) || throw(DimensionMismatch("compute_loglik: y and X*b must have same length!"))
 
     # each part accumulates sum s
