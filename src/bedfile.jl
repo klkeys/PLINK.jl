@@ -34,20 +34,23 @@ function BEDFile(
 	blocksize  :: Int, 
 	tblocksize :: Int, 
 	x2filename :: ASCIIString;
+	pids       :: DenseVector{Int} = procs()
 )
-	x     = BEDFile(read_bedfile(filename),read_bedfile(tfilename, transpose = true),n,p,blocksize,tblocksize,SharedArray(T,n,0,pids=procs()),0,SharedArray(T,0,n,pids=procs()))
+	x     = BEDFile(read_bedfile(filename, pids=pids),read_bedfile(tfilename, transpose = true, pids=pids),n,p,blocksize,tblocksize,SharedArray(T,n,0,pids=pids),0,SharedArray(T,0,n,pids=pids))
 	x2    = readdlm(x2filename, T)
-    x2_s  = SharedArray(T, size(x2), pids=procs()) 
+    x2_s  = SharedArray(T, size(x2), init = S -> localindexes(S) = zero(T), pids=pids) 
     copy!(x2_s, x2)
 	p2    = size(x2,2)
 	x.x2  = x2_s
-	x.x2t = x2_s'
+	x.x2t = SharedArray(T, reverse(size(x2)), init = S -> localindexes(S) = zero(T), pids=pids) 
+#	x.x2t = reshape(x2_s, reverse(size(x2_s))) 
+	copy!(x.x2t, x2')
 	x.p2  = p2
 	return x
 end
 
 # for previous constructor, if type is not defined then default to Float64
-BEDFile(filename::ASCIIString, tfilename::ASCIIString, n::Int, p::Int, blocksize::Int, tblocksize::Int, x2filename::ASCIIString) = BEDFile(Float64, filename, tfilename, n, p, blocksize, tblocksize, x2filename)
+BEDFile(filename::ASCIIString, tfilename::ASCIIString, n::Int, p::Int, blocksize::Int, tblocksize::Int, x2filename::ASCIIString; pids::DenseVector{Int} = procs()) = BEDFile(Float64, filename, tfilename, n, p, blocksize, tblocksize, x2filename, pids=pids)
 
 function BEDFile(
 	T          :: Type, 
@@ -55,25 +58,28 @@ function BEDFile(
 	tfilename  :: ASCIIString, 
 	n          :: Int, 
 	p          :: Int, 
-	x2filename :: ASCIIString
+	x2filename :: ASCIIString;
+	pids       :: DenseVector{Int} = procs()
 )
-	x     = BEDFile(read_bedfile(filename),read_bedfile(tfilename, transpose=true),n,p,((n-1)>>>2)+1,((p-1)>>>2)+1,SharedArray(T,n,0),0, SharedArray(T,0,n))
+	x     = BEDFile(read_bedfile(filename, pids=pids),read_bedfile(tfilename, transpose=true, pids=pids),n,p,((n-1)>>>2)+1,((p-1)>>>2)+1,SharedArray(T,n,0,pids=pids),0, SharedArray(T,0,n,pids=pids), pids=pids)
 	x2    = readdlm(x2filename)
-    x2_s  = SharedArray(T, size(x2), pids=procs()) 
+    x2_s  = SharedArray(T, size(x2), init = S -> localindexes(S) = zero(T), pids=pids) 
     copy!(x2_s, x2)
 	p2    = size(x2,2)
 	x.x2  = x2_s
-	x.x2t = x2_s'
+#	x.x2t = reshape(x2_s, reverse(size(x2_s))) 
+	x.x2t = SharedArray(T, reverse(size(x2)), init = S -> localindexes(S) = zero(T), pids=pids) 
+	copy!(x.x2t, x2')
 	x.p2  = p2
 	return x
 end
 
 # set default type for previous constructor to Float64
-BEDFile(filename::ASCIIString, tfilename::ASCIIString, n::Int, p::Int, x2filename::ASCIIString) = BEDFile(Float64, filename, tfilename, n, p, xtfilename)
+BEDFile(filename::ASCIIString, tfilename::ASCIIString, n::Int, p::Int, x2filename::ASCIIString; pids::DenseVector{Int} = procs()) = BEDFile(Float64, filename, tfilename, n, p, xtfilename, pids=pids)
 
 # a more complicated constructor that attempts to infer n, p, and blocksize based on the BED filepath
 # it assumes that the BED, FAM, and BIM files are all in the same directory
-function BEDFile(T::Type, filename::ASCIIString, tfilename::ASCIIString)
+function BEDFile(T::Type, filename::ASCIIString, tfilename::ASCIIString; pids::DenseVector{Int} = procs())
 
 	# find n from the corresponding FAM file 
 	famfile = filename[1:(endof(filename)-3)] * "fam"
@@ -88,39 +94,43 @@ function BEDFile(T::Type, filename::ASCIIString, tfilename::ASCIIString)
 	tblocksize = ((p-1) >>> 2) + 1
 
 	# now load x, xt
-	x   = read_bedfile(filename)
-	xt  = read_bedfile(tfilename, transpose=true)
-	x2  = SharedArray(T,n,0, pids=procs()) 
-	x2t = x2' 
+	x   = read_bedfile(filename, pids=pids)
+	xt  = read_bedfile(tfilename, transpose=true, pids=pids)
+	x2  = SharedArray(T,n,0, init = S -> localindexes(S) = zero(T), pids=pids) 
+	x2t = SharedArray(T,0,n, init = S -> localindexes(S) = zero(T), pids=pids) 
+#	x2t = reshape(x2, reverse(size(x2))) 
 
 	return BEDFile(x,xt,n,p,blocksize,tblocksize,x2,0,x2t)
 end
 
 # set default type for previous constructor to Float64
-BEDFile(filename::ASCIIString, tfilename::ASCIIString) = BEDFile(Float64, filename, tfilename)
+BEDFile(filename::ASCIIString, tfilename::ASCIIString; pids::DenseVector{Int} = procs()) = BEDFile(Float64, filename, tfilename, pids=pids)
 
 
 # an extra constructor based on previous one 
 # this one admits a third file path for the nongenetic covariates 
 # it uncreatively creates a BEDFile using previous constructor with two file paths,
 # and then fills the nongenetic covariates with the third file path 
-function BEDFile(T::Type, filename::ASCIIString, tfilename::ASCIIString, x2filename::ASCIIString; header::Bool = true)
+function BEDFile(T::Type, filename::ASCIIString, tfilename::ASCIIString, x2filename::ASCIIString; header::Bool = false, pids::DenseVector{Int} = procs())
 
-	x    = BEDFile(T, filename, tfilename)
+	x    = BEDFile(T, filename, tfilename, pids=pids)
 	x2   = readdlm(x2filename, header=header)
-    x2_s = SharedArray(T, size(x2), pids = procs())
-    for i = size(x2,1), j = size(x2,2)
-        x2_s[i,j] = x2[i,j]
-    end
-	x.n   == size(x2_s,1) || throw(DimensionMismatch("Nongenetic covariates have more rows than genotype matrix"))
-	x.x2  = x2_s
-	x.p2  = size(x2_s,2)
-	x.x2t = x2_s'
+	x.n   == size(x2,1) || throw(DimensionMismatch("Nongenetic covariates have more rows than genotype matrix"))
+#    x2_s = SharedArray(T, size(x2), pids = pids)
+#	copy!(x2_s, x2)
+#	x.x2  = x2_s
+	x.x2 = SharedArray(T, size(x2), pids = pids)
+	copy!(x.x2, x2)
+#	x.p2  = size(x2_s,2)
+	x.p2 = size(x2,2)
+#	x.x2t = reshape(x2_s, reverse(size(x2_s)))
+	x.x2t = SharedArray(T, reverse(size(x2)), pids = pids)
+	copy!(x.x2t, x2')
 	return x 
 end
 
 # set default type for previous constructor to Float64
-BEDFile(filename::ASCIIString, tfilename::ASCIIString, x2filename::ASCIIString; header::Bool = true) = BEDFile(Float64, filename, tfilename, x2filename, header=header)
+BEDFile(filename::ASCIIString, tfilename::ASCIIString, x2filename::ASCIIString; header::Bool = false, pids::DenseVector{Int} = procs()) = BEDFile(Float64, filename, tfilename, x2filename, header=header, pids=pids)
 
 
 ###########################
@@ -175,32 +185,38 @@ copy(x::BEDFile) = BEDFile(x.x, x.xt, x.n, x.p, x.blocksize, x.tblocksize, x.x2,
 
 isequal(x::BEDFile, y::BEDFile) = x == y 
 
-function addx2!(x::BEDFile, x2::DenseArray{Float64,2})
+function addx2!(x::BEDFile, x2::DenseArray{Float64,2}; pids::DenseVector{Int} = procs())
 	(n,p2) = size(x2)
 	n == x.n || throw(DimensionMismatch("x2 has $n rows but should have $(x.n) of them"))
 	x.p2 = p2
-	x.x2 = SharedArray(Float64, n, p2, pids = procs())
-	for j = 1:p2
-		for i = 1:x.n
-			@inbounds x.x2[i,j] = x2[i,j]
-		end
-	end
-	x.x2t = x.x2'
+	x.x2 = SharedArray(Float64, n, p2, init = S -> localindexes(S) = zero(Float64), pids=pids)
+#	for j = 1:p2
+#		for i = 1:x.n
+#			@inbounds x.x2[i,j] = x2[i,j]
+#		end
+#	end
+#	x.x2t = reshape(x.x2, reverse(size(x.x2)))
+	copy!(x.x2,x2)
+	x.x2t = SharedArray(Float64, p2, n, init = S -> localindexes(S) = zero(Float64), pids=pids)
+	copy!(x.x2t, x2')
 	return nothing
 end
 
 
-function addx2!(x::BEDFile, x2::DenseArray{Float32,2})
+function addx2!(x::BEDFile, x2::DenseArray{Float32,2}; pids::DenseVector{Int} = procs())
 	(n,p2) = size(x2)
 	n == x.n || throw(DimensionMismatch("x2 has $n rows but should have $(x.n) of them"))
 	x.p2 = p2
-	x.x2 = SharedArray(Float32, n, p2, pids = procs())
-	for j = 1:p2
-		for i = 1:x.n
-			@inbounds x.x2[i,j] = x2[i,j]
-		end
-	end
-	x.x2t = x.x2'
+	x.x2 = SharedArray(Float32, n, p2, init = S -> localindexes(S) = zero(Float32), pids=pids)
+#	for j = 1:p2
+#		for i = 1:x.n
+#			@inbounds x.x2[i,j] = x2[i,j]
+#		end
+#	end
+#	x.x2t = reshape(x.x2, reverse(size(x.x2)))
+	copy!(x.x2,x2)
+	x.x2t = SharedArray(Float32, p2, n, init = S -> localindexes(S) = zero(Float32), pids=pids)
+	copy!(x.x2t,x2')
 	return nothing
 end
 
@@ -229,39 +245,38 @@ end
 #
 # coded by Kevin L. Keys (2015)
 # klkeys@g.ucla.edu
-function read_bedfile(filename::ASCIIString; transpose::Bool = false) 
+function read_bedfile(filename::ASCIIString; transpose::Bool = false, pids::DenseVector{Int} = procs()) 
 
 	# check that file is BED file
 	contains(filename, ".bed") || throw(ArgumentError("Filename must point to a PLINK BED file."))
 
-	# slurp file as bitstream into variable x
-	# in process, reinterpret bitstream into Int8
-	x = open(filename) do f
-		reinterpret(Int8, readbytes(f))
-	end
-
     # how many bytes do we have?
-    nbytes = length(x)
+	# compute from IOStream to BED file
+#	xstream = open(filename, "r")
+#	nbytes = position(seekend(xstream))
+#	close(xstream)
+	nbytes = filesize(filename)
 
-	# check magic number
-#	isequal(x[1], MNUM1) || throw(error("Problem with first byte of magic number, is this a true BED file?"))
-#	isequal(x[2], MNUM2) || throw(error("Problem with second byte of magic number, is this a true BED file?"))
+	# open file stream
+	xstream = open(filename, "r")
 
-	# check mode
-	(transpose && isequal(x[3], ONE8)) && throw(error("For transposed matrix, third byte of BED file must indicate individual-major format."))
+	# check magic numbers and mode
+#	isequal(read(xstream, Int8), MNUM1) || throw(error("Problem with first byte of magic number, is this a true BED file?"))
+#	isequal(read(xstream, Int8), MNUM2) || throw(error("Problem with second byte of magic number, is this a true BED file?"))
+#	(transpose && isequal(read(xstream, Int8), ONE8)) && throw(error("For transposed matrix, third byte of BED file must indicate individual-major format."))
+	
+	# now slurp file contents into SharedArray
+#	x = SharedArray(abspath(filename), Int8, (nbytes,), pids=pids)
 
-    # we want a SharedArray, so we need to construct it explicitly
-    # want to discard first three bytes as well
-    # initialize SharedArray over all processes but with 3 fewer components
-    # should ensure that components get distributed over processes equitably
-    x2 = SharedArray(Int8, nbytes - 3, pids = procs())
-    for i = 1:length(x2)
-        x2[i] = x[i+3]
-    end
+	# file seems to be a true BED file
+	# will close filestream and slurp entire file into SharedArray
+	close(xstream)
+	x = SharedArray(abspath(filename), Int8, (nbytes-3,), 3, pids=pids)
 
-	# we can now safely assume that file is true BED file
+
 	# return the genotypes
-    return x2
+#	return x[4:end]
+	return x
 end
 
 
@@ -271,7 +286,7 @@ end
 # Argument X is vacuous; it simply ensures no ambiguity with current Array implementations
 function subset_genotype_matrix(
 	X         :: BEDFile, 
-	x         :: DenseArray{Int8,1}, 
+	x         :: DenseVector{Int8}, 
 	rowidx    :: BitArray{1}, 
 	colidx    :: BitArray{1}, 
 	n         :: Int, 
@@ -377,7 +392,7 @@ end
 
 function subset_genotype_matrix(
 	X         :: BEDFile, 
-	x         :: DenseArray{Int8,1}, 
+	x         :: DenseVector{Int8}, 
 	rowidx    :: UnitRange{Int}, 
 	colidx    :: BitArray{1}, 
 	n         :: Int, 
@@ -475,7 +490,7 @@ end
 
 function subset_genotype_matrix(
 	X         :: BEDFile, 
-	x         :: DenseArray{Int8,1}, 
+	x         :: DenseVector{Int8}, 
 	rowidx    :: BitArray{1}, 
 	colidx    :: UnitRange{Int}, 
 	n         :: Int, 
@@ -577,7 +592,7 @@ end
 
 function subset_genotype_matrix(
 	X         :: BEDFile, 
-	x         :: DenseArray{Int8,1}, 
+	x         :: DenseVector{Int8}, 
 	rowidx    :: UnitRange{Int}, 
 	colidx    :: UnitRange{Int}, 
 	n         :: Int, 

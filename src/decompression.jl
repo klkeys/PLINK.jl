@@ -135,11 +135,11 @@ end
 # coded by Kevin L. Keys and Kenneth Lange (2015)
 # klkeys@g.ucla.edu
 function decompress_genotypes!(
-	y       :: DenseArray{Float64,1}, 
+	y       :: DenseVector{Float64}, 
 	x       :: BEDFile, 
 	snp     :: Int, 
-	means   :: DenseArray{Float64,1}, 
-	invstds :: DenseArray{Float64,1}
+	means   :: DenseVector{Float64}, 
+	invstds :: DenseVector{Float64}
 )
 	m = means[snp]
 	d = invstds[snp]
@@ -159,11 +159,11 @@ end
 
 
 function decompress_genotypes!(
-	y       :: DenseArray{Float32,1}, 
+	y       :: DenseVector{Float32}, 
 	x       :: BEDFile, 
 	snp     :: Int, 
-	means   :: DenseArray{Float32,1}, 
-	invstds :: DenseArray{Float32,1}
+	means   :: DenseVector{Float32}, 
+	invstds :: DenseVector{Float32}
 )
 	m = means[snp]
 	d = invstds[snp]
@@ -195,11 +195,12 @@ end
 function decompress_genotypes(
 	x       :: BEDFile, 
 	snp     :: Int, 
-	means   :: DenseArray{Float64,1}, 
-	invstds :: DenseArray{Float64,1}; 
-	shared  :: Bool = true
+	means   :: DenseVector{Float64}, 
+	invstds :: DenseVector{Float64}; 
+	shared  :: Bool = true,
+	procs   :: DenseVector{Int} = procs()
 )
-	y = ifelse(shared, SharedArray(Float64, x.n, init = S -> S[localindexes(S)] = 0.0), zeros(Float64,x.n))
+	y = ifelse(shared, SharedArray(Float64, x.n, init = S -> S[localindexes(S)] = zero(Float64), pids=pids), zeros(Float64,x.n))
 	decompress_genotypes!(y,x,snp,means,invstds)
 	return y 
 end
@@ -208,11 +209,12 @@ end
 function decompress_genotypes(
 	x       :: BEDFile, 
 	snp     :: Int, 
-	means   :: DenseArray{Float32,1}, 
-	invstds :: DenseArray{Float32,1}; 
-	shared  :: Bool = true
+	means   :: DenseVector{Float32}, 
+	invstds :: DenseVector{Float32}; 
+	shared  :: Bool = true,
+	pids    :: DenseVector{Int} = procs()
 )
-	y = ifelse(shared, SharedArray(Float32, x.n, init = S -> S[localindexes(S)] = 0.0f0), zeros(Float32,x.n))
+	y = ifelse(shared, SharedArray(Float32, x.n, init = S -> S[localindexes(S)] = zero(Float32), pids=pids), zeros(Float32,x.n))
 	decompress_genotypes!(y,x,snp,means,invstds)
 	return y 
 end
@@ -236,12 +238,12 @@ end
 # coded by Kevin L. Keys (2015)
 # klkeys@g.ucla.edu
 function decompress_genotypes!(
-	Y       :: DenseArray{Float64,2}, 
-	x       :: BEDFile; 
-#	y       :: DenseArray{Float64,1} = SharedArray(Float64, x.n), 
-	means   :: DenseArray{Float64,1} = mean(Float64,x), 
-	invstds :: DenseArray{Float64,1} = invstd(x,means),
-	standardize :: Bool = true
+	Y           :: DenseMatrix{Float64}, 
+	x           :: BEDFile; 
+	means       :: DenseVector{Float64} = mean(Float64,x), 
+	invstds     :: DenseVector{Float64} = invstd(x,means),
+	standardize :: Bool = true,
+#	pids        :: DenseVector{Int} = procs()
 ) 
 
 	# get dimensions of matrix to fill 
@@ -253,13 +255,7 @@ function decompress_genotypes!(
 	n == xn || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
 	p <= xp || throw(DimensionMismatch("Y has more columns than x"))
 
-#	@inbounds for j = 1:xp
-#		decompress_genotypes!(y,x,j,means,invstds)	
-#		@inbounds for i = 1:n
-#			Y[i,j] = y[i]
-#		end
-#	end 
-	
+	## TODO: parallelize this for SharedArrays
 	@inbounds for j = 1:xp
 		if standardize
 			m = means[j]
@@ -278,12 +274,12 @@ end
 
 
 function decompress_genotypes!(
-	Y       :: DenseArray{Float32,2}, 
+	Y       :: DenseMatrix{Float32}, 
 	x       :: BEDFile; 
-#	y       :: DenseArray{Float32,1} = SharedArray(Float32, x.n), 
-	means   :: DenseArray{Float32,1} = mean(Float32,x), 
-	invstds :: DenseArray{Float32,1} = invstd(x,means),
+	means   :: DenseVector{Float32} = mean(Float32,x), 
+	invstds :: DenseVector{Float32} = invstd(x,means),
 	standardize :: Bool = true
+#	pids        :: DenseVector{Int} = procs()
 ) 
 
 	# get dimensions of matrix to fill 
@@ -295,13 +291,7 @@ function decompress_genotypes!(
 	n == xn || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
 	p <= xp || throw(DimensionMismatch("Y has more columns than x"))
 
-#	@inbounds for j = 1:xp
-#		decompress_genotypes!(y,x,j,means,invstds)	
-#		@inbounds for i = 1:n
-#			Y[i,j] = y[i]
-#		end
-#	end 
-	
+	## TODO: parallelize this for SharedArrays
 	@inbounds for j = 1:xp
 		if standardize
 			m = means[j]
@@ -337,11 +327,11 @@ end
 # coded by Kevin L. Keys (2015)
 # klkeys@g.ucla.edu
 function decompress_genotypes!(
-	Y       :: DenseArray{Float64,2}, 
+	Y       :: DenseMatrix{Float64}, 
 	x       :: BEDFile, 
 	indices :: BitArray{1}; 
-	means   :: DenseArray{Float64,1} = mean(Float64,x),
-	invstds :: DenseArray{Float64,1} = invstd(x,means)
+	means   :: DenseVector{Float64} = mean(Float64,x),
+	invstds :: DenseVector{Float64} = invstd(x,means)
 )
 
 	# get dimensions of matrix to fill 
@@ -358,6 +348,7 @@ function decompress_genotypes!(
 	current_col = 0
 
 	quiet = true 
+	## TODO: parallelize this for SharedArrays
 	@inbounds for snp = 1:xp
 
 		# use this column?
@@ -393,11 +384,11 @@ end
 
 
 function decompress_genotypes!(
-	Y       :: DenseArray{Float32,2}, 
+	Y       :: DenseMatrix{Float32}, 
 	x       :: BEDFile, 
 	indices :: BitArray{1}; 
-	means   :: DenseArray{Float32,1} = mean(Float32,x),
-	invstds :: DenseArray{Float32,1} = invstd(x,means)
+	means   :: DenseVector{Float32} = mean(Float32,x),
+	invstds :: DenseVector{Float32} = invstd(x,means)
 )
 
 	# get dimensions of matrix to fill 
@@ -414,6 +405,7 @@ function decompress_genotypes!(
 	current_col = 0
 
 	quiet = true 
+	## TODO: parallelize this for SharedArrays
 	@inbounds for snp = 1:xp
 
 		# use this column?
@@ -452,12 +444,12 @@ end
 
 
 function decompress_genotypes!(
-	Y       :: DenseArray{Float64,2}, 
+	Y       :: DenseMatrix{Float64}, 
 	x       :: BEDFile, 
 	indices :: BitArray{1},
 	mask_n  :: DenseArray{Int,1}; 
-	means   :: DenseArray{Float64,1} = mean(Float64,x),
-	invstds :: DenseArray{Float64,1} = invstd(x,means)
+	means   :: DenseVector{Float64} = mean(Float64,x),
+	invstds :: DenseVector{Float64} = invstd(x,means)
 )
 
 	# get dimensions of matrix to fill 
@@ -518,12 +510,12 @@ end
 
 
 function decompress_genotypes!(
-	Y       :: DenseArray{Float32,2}, 
+	Y       :: DenseMatrix{Float32}, 
 	x       :: BEDFile, 
 	indices :: BitArray{1},
 	mask_n  :: DenseArray{Int,1}; 
-	means   :: DenseArray{Float32,1} = mean(Float32,x),
-	invstds :: DenseArray{Float32,1} = invstd(x,means)
+	means   :: DenseVector{Float32} = mean(Float32,x),
+	invstds :: DenseVector{Float32} = invstd(x,means)
 )
 
 	# get dimensions of matrix to fill 
@@ -601,11 +593,11 @@ end
 # coded by Kevin L. Keys (2015)
 # klkeys@g.ucla.edu
 function decompress_genotypes!(
-	Y       :: DenseArray{Float64,2}, 
+	Y       :: DenseMatrix{Float64}, 
 	x       :: BEDFile, 
 	indices :: DenseArray{Int,1}; 
-	means   :: DenseArray{Float64,1} = mean(Float64,x), 
-	invstds :: DenseArray{Float64,1} = invstd(x,means)
+	means   :: DenseVector{Float64} = mean(Float64,x), 
+	invstds :: DenseVector{Float64} = invstd(x,means)
 )
 
 	# get dimensions of matrix to fill 
@@ -652,11 +644,11 @@ end
 
 
 function decompress_genotypes!(
-	Y       :: DenseArray{Float32,2}, 
+	Y       :: DenseMatrix{Float32}, 
 	x       :: BEDFile, 
 	indices :: DenseArray{Int,1}; 
-	means   :: DenseArray{Float32,1} = mean(Float32,x), 
-	invstds :: DenseArray{Float32,1} = invstd(x,means)
+	means   :: DenseVector{Float32} = mean(Float32,x), 
+	invstds :: DenseVector{Float32} = invstd(x,means)
 )
 
 	# get dimensions of matrix to fill 
