@@ -14,7 +14,7 @@ function maf(x::BEDFile; y::DenseVector{Float64} = zeros(Float64,x.n))
 	z = zeros(Float64,x.p)
 	@inbounds for i = 1:x.p
 		decompress_genotypes!(y,x,i)
-		z[i] = (min( sum(y .== 1.0), sum(y .== -1.0)) + 0.5*sum(y .== 0.0)) / (x.n - sum(isnan(y)))
+		z[i] = (min( sum(y .== one(Float64)), sum(y .== -one(Float64))) + 0.5*sum(y .== zero(Float64))) / (x.n - sum(isnan(y)))
 	end
 	return z
 end
@@ -24,7 +24,7 @@ function maf(x::BEDFile; y::DenseVector{Float32} = zeros(Float32,x.n))
 	z = zeros(Float32,x.p)
 	@inbounds for i = 1:x.p
 		decompress_genotypes!(y,x,i)
-		z[i] = (min( sum(y .== 1.0), sum(y .== -1.0)) + 0.5*sum(y .== 0.0)) / (x.n - sum(isnan(y)))
+		z[i] = (min( sum(y .== one(Float32)), sum(y .== -one(Float32))) + 0.5f0*sum(y .== zero(Float32))) / (x.n - sum(isnan(y)))
 	end
 	return z
 end
@@ -56,8 +56,8 @@ function sumsq_snp(
 	means   :: DenseVector{Float64}, 
 	invstds :: DenseVector{Float64}
 ) 
-	s = 0.0		# accumulation variable, will eventually equal dot(y,z)
-	t = 0.0		# temp variable, output of interpret_genotype
+	s = zero(Float64)		# accumulation variable, will eventually equal dot(y,z)
+	t = zero(Float64)		# temp variable, output of interpret_genotype
 	m = means[snp]
 	d = invstds[snp]
 
@@ -78,8 +78,8 @@ function sumsq_snp(
 	means   :: DenseVector{Float32}, 
 	invstds :: DenseVector{Float32}
 ) 
-	s = 0.0f0	# accumulation variable, will eventually equal dot(y,z)
-	t = 0.0f0 	# temp variable, output of interpret_genotype
+	s = zero(Float32)	# accumulation variable, will eventually equal dot(y,z)
+	t = zero(Float32) 	# temp variable, output of interpret_genotype
 	m = means[snp]
 	d = invstds[snp]
 
@@ -99,8 +99,8 @@ function sumsq_covariate(
 	means     :: DenseVector{Float64}, 
 	invstds   :: DenseVector{Float64}
 ) 
-	t = 0.0 
-	s = 0.0 
+	t = zero(Float64) 
+	s = zero(Float64) 
 	m = means[x.p + covariate]
 	d = invstds[x.p + covariate]
 
@@ -119,8 +119,8 @@ function sumsq_covariate(
 	means     :: DenseVector{Float32}, 
 	invstds   :: DenseVector{Float32}
 ) 
-	t = 0.0f0 
-	s = 0.0f0 
+	t = zero(Float32) 
+	s = zero(Float32) 
 	m = means[x.p + covariate]
 	d = invstds[x.p + covariate]
 
@@ -146,10 +146,10 @@ end
 # coded by Kevin L. Keys (2015)
 # klkeys@g.ucla.edu
 function sumsq!(
-	y       :: SharedArray{Float64,1}, 
+	y       :: SharedVector{Float64}, 
 	x       :: BEDFile, 
-	means   :: SharedArray{Float64,1}, 
-	invstds :: SharedArray{Float64,1}
+	means   :: SharedVector{Float64}, 
+	invstds :: SharedVector{Float64}
 )
 	(x.p + x.p2) == length(y) || throw(DimensionMismatch("y must have one row for every column of x"))
 	@sync @inbounds @parallel for snp = 1:x.p
@@ -163,10 +163,10 @@ function sumsq!(
 end
 
 function sumsq!(
-	y       :: SharedArray{Float32,1}, 
+	y       :: SharedVector{Float32}, 
 	x       :: BEDFile, 
-	means   :: SharedArray{Float32,1}, 
-	invstds :: SharedArray{Float32,1}
+	means   :: SharedVector{Float32}, 
+	invstds :: SharedVector{Float32}
 )
 	(x.p + x.p2) == length(y) || throw(DimensionMismatch("y must have one row for every column of x"))
 	@sync @inbounds @parallel for snp = 1:x.p
@@ -182,10 +182,10 @@ end
 
 
 function sumsq!(
-	y       :: Array{Float64,1}, 
+	y       :: Vector{Float64}, 
 	x       :: BEDFile, 
-	means   :: Array{Float64,1}, 
-	invstds :: Array{Float64,1}
+	means   :: Vector{Float64}, 
+	invstds :: Vector{Float64}
 )
 	(x.p + x.p2) == length(y) || throw(DimensionMismatch("y must have one row for every column of x"))
 	@inbounds for snp = 1:x.p
@@ -201,10 +201,10 @@ end
 
 
 function sumsq!(
-	y       :: Array{Float32,1}, 
+	y       :: Vector{Float32}, 
 	x       :: BEDFile, 
-	means   :: Array{Float32,1}, 
-	invstds :: Array{Float32,1}
+	means   :: Vector{Float32}, 
+	invstds :: Vector{Float32}
 )
 	(x.p + x.p2) == length(y) || throw(DimensionMismatch("y must have one row for every column of x"))
 	@inbounds for snp = 1:x.p
@@ -255,13 +255,13 @@ end
 #
 # coded by Kevin L. Keys (2015)
 # klkeys@g.ucla.edu
-function mean(T::Type, x::BEDFile; shared::Bool = true)
+function mean(T::Type, x::BEDFile; shared::Bool = true, pids::DenseVector{Int} = procs())
 
 	# enforce floating point type
 #	@compat T <: Union{Float32, Float64} || throw(ArgumentError("Type must be Float32 or Float64"))
 
 	# initialize return vector
-	y = ifelse(shared, SharedArray(T, x.p + x.p2, init= S -> S[localindexes(S)] = zero(T)), zeros(T, x.p + x.p2))
+	y = ifelse(shared, SharedArray(T, x.p + x.p2, init= S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, x.p + x.p2))
 
 	if shared
 		@sync @inbounds @parallel for snp = 1:x.p
@@ -283,7 +283,7 @@ function mean(T::Type, x::BEDFile; shared::Bool = true)
 end
 
 # for mean function, set default type to Float64
-mean(x::BEDFile; shared::Bool = true) = mean(Float64, x, shared=shared)
+mean(x::BEDFile; shared::Bool = true, pids::DenseVector{Int}) = mean(Float64, x, shared=shared, pids=pids)
 
 function mean_col(T::Type, x::BEDFile, snp::Int)
 	s = zero(T)	# accumulation variable, will eventually equal mean(x,col) for current col 
@@ -325,20 +325,20 @@ mean_col(x::BEDFile, snp::Int) = mean_col(Float64, x, snp)
 # klkeys@g.ucla.edu
 #
 ### WARNING: need to fix type assertions here!
-function invstd(x::BEDFile, means::DenseVector{Float64}; shared::Bool = true) 
+function invstd(x::BEDFile, means::DenseVector{Float64}; shared::Bool = true, pids::DenseVector{Int} = procs()) 
 
 	# initialize return vector
-	z = ifelse(shared, SharedArray(Float64, x.p + x.p2, init = S -> S[localindexes(S)] = zero(Float64)), zeros(Float64, x.p + x.p2))
+	z = ifelse(shared, SharedArray(Float64, x.p + x.p2, init = S -> S[localindexes(S)] = zero(Float64), pids=pids), zeros(Float64, x.p + x.p2))
 
-	if shared
-		@sync @inbounds @parallel for snp = 1:x.p
-			z[snp] = invstd_col(Float64, x, snp, means)
-		end
-	else
+#	if shared
+#		@sync @inbounds @parallel for snp = 1:x.p
+#			z[snp] = invstd_col(Float64, x, snp, means)
+#		end
+#	else
 		@inbounds  for snp = 1:x.p
 			z[snp] = invstd_col(Float64, x, snp, means)
 		end
-	end
+#	end
 	for i = 1:x.p2 
 		for j = 1:x.n
 			@inbounds z[x.p + i] += (x.x2[j,i] - means[x.p + i])^2
@@ -349,20 +349,20 @@ function invstd(x::BEDFile, means::DenseVector{Float64}; shared::Bool = true)
 	return z
 end
 
-function invstd(x::BEDFile, means::DenseVector{Float32}; shared::Bool = true) 
+function invstd(x::BEDFile, means::DenseVector{Float32}; shared::Bool = true, pids::DenseVector{Int} = procs())  
 
 	# initialize return vector
-	z = ifelse(shared, SharedArray(Float32, x.p + x.p2, init = S -> S[localindexes(S)] = zero(Float32)), zeros(Float32, x.p + x.p2))
+	z = ifelse(shared, SharedArray(Float32, x.p + x.p2, init = S -> S[localindexes(S)] = zero(Float32), pids=pids), zeros(Float32, x.p + x.p2))
 
-	if shared
-		@sync @inbounds @parallel for snp = 1:x.p
-			z[snp] = invstd_col(Float32, x, snp, means)
-		end
-	else
+#	if shared
+#		@sync @inbounds @parallel for snp = 1:x.p
+#			z[snp] = invstd_col(Float32, x, snp, means)
+#		end
+#	else
 		@inbounds  for snp = 1:x.p
 			z[snp] = invstd_col(Float32, x, snp, means)
 		end
-	end
+#	end
 	for i = 1:x.p2 
 		for j = 1:x.n
 			@inbounds z[x.p + i] += (x.x2[j,i] - means[x.p + i])^2
@@ -404,219 +404,6 @@ end
 # for previous function, set default bitstype to Float64
 invstd_col(x::BEDFile, snp::Int, means::DenseVector) = invstd_col(Float64, x, snp, means)
 
-## UPDATE PARTIAL RESIDUALS BASED ON PERMUTATION VECTOR FOR COMPRESSED X
-## 
-## This function computes the residual sum of squares || Y - XB ||_2^2 using the compressed matrix in a BEDFile object.
-##
-## Arguments:
-## -- r is the vector to overwrite with the residuals.
-## -- Y is the response vector.
-## -- x is the BEDFile object with the compressed n x p design matrix.
-## -- perm is a vector of integers that indexes the nonzeroes in b. 
-## -- b is the parameter vector
-## -- k is the desired number of components of b to use in the calculation. It should equal the number of nonzeroes in b.
-##
-##
-## coded by Kevin L. Keys (2015)
-## klkeys@g.ucla.edu
-#function update_partial_residuals!(
-#	r       :: SharedArray{Float64,1}, 
-#	y       :: SharedArray{Float64,1}, 
-#	x       :: BEDFile, 
-#	perm    :: SharedArray{Int,1}, 
-#	b       :: DenseVector{Float64}, 
-#	k       :: Int; 
-#	mean    :: DenseVector{Float64}  = mean(Float64,x, shared=true), 
-#	invstds :: DenseVector{Float64}  = invstd(x,means, shared=true), 
-#	Xb      :: SharedArray{Float64,1} = xb(X,b,support,k, means=means, invstds=invstds)
-#) 
-#	k <= length(b)   || throw(ArgumentError("k cannot exceed the length of b!"))
-#	length(r) == x.n || throw(DimensionMismatch("r must have length $(x.n)!"))
-#	length(y) == x.n || throw(DimensionMismatch("y must have length $(x.n)!"))
-#
-#	@sync @inbounds @parallel for i = 1:x.n
-#		r[i] = y[i] - Xb[i]
-#	end
-#	return nothing 
-#end
-#
-#
-#function update_partial_residuals!(
-#	r       :: SharedArray{Float32,1}, 
-#	y       :: SharedArray{Float32,1}, 
-#	x       :: BEDFile, 
-#	perm    :: SharedArray{Int,1}, 
-#	b       :: DenseVector{Float32}, 
-#	k       :: Int; 
-#	mean    :: DenseVector{Float32}  = mean(Float32,x, shared=true), 
-#	invstds :: DenseVector{Float32}  = invstd(x,means, shared=true), 
-#	Xb      :: SharedArray{Float32,1} = xb(X,b,support,k, means=means, invstds=invstds)
-#) 
-#	k <= length(b)   || throw(ArgumentError("k cannot exceed the length of b!"))
-#	length(r) == x.n || throw(DimensionMismatch("r must have length $(x.n)!"))
-#	length(y) == x.n || throw(DimensionMismatch("y must have length $(x.n)!"))
-#
-#	@inbounds for i = 1:x.n
-#		r[i] = y[i] - Xb[i]
-#	end
-#	return nothing 
-#end
-#
-#function update_partial_residuals!(
-#	r       :: Array{Float64,1}, 
-#	y       :: Array{Float64,1}, 
-#	x       :: BEDFile, 
-#	perm    :: Array{Int,1}, 
-#	b       :: Array{Float64,1}, 
-#	k       :: Int; 
-#	means   :: DenseVector{Float64} = mean(Float64,x, shared=false), 
-#	invstds :: DenseVector{Float64} = invstd(x,means, shared=false), 
-#	Xb      :: Array{Float64,1}      = xb(X,b,support,k, means=means, invstds=invstds)
-#) 
-#	k <= length(b)   || throw(ArgumentError("k cannot exceed the length of b!"))
-#	length(r) == x.n || throw(DimensionMismatch("r must have length $(x.n)!"))
-#	length(y) == x.n || throw(DimensionMismatch("y must have length $(x.n)!"))
-#
-#	@inbounds for i = 1:x.n
-#		r[i] = y[i] - Xb[i]
-#	end
-#
-#	return nothing 
-#end
-#
-#
-#function update_partial_residuals!(
-#	r       :: Array{Float32,1}, 
-#	y       :: Array{Float32,1}, 
-#	x       :: BEDFile, 
-#	perm    :: Array{Int,1}, 
-#	b       :: Array{Float32,1}, 
-#	k       :: Int; 
-#	means   :: DenseVector{Float32} = mean(Float32,x, shared=false), 
-#	invstds :: DenseVector{Float32} = invstd(x,means, shared=false), 
-#	Xb      :: Array{Float32,1}      = xb(X,b,support,k, means=means, invstds=invstds)
-#) 
-#	k <= length(b)   || throw(ArgumentError("k cannot exceed the length of b!"))
-#	length(r) == x.n || throw(DimensionMismatch("r must have length $(x.n)!"))
-#	length(y) == x.n || throw(DimensionMismatch("y must have length $(x.n)!"))
-#
-#	@inbounds for i = 1:x.n
-#		r[i] = y[i] - Xb[i]
-#	end
-#
-#	return nothing 
-#end
-#
-## UPDATE PARTIAL RESIDUALS BASED ON PERMUTATION VECTOR FOR COMPRESSED X
-## 
-## This function computes the residual sum of squares || Y - XB ||_2^2 using the compressed matrix in a BEDFile object.
-##
-## Arguments:
-## -- r is the vector to overwrite with the residuals.
-## -- Y is the response vector.
-## -- x is the BEDFile object with the compressed n x p design matrix.
-## -- indices is a BitArray that indexes the nonzeroes in b. 
-## -- b is the parameter vector.
-## -- k is the desired number of components of b to use in the calculation. It should equal the number of nonzeroes in b.
-##
-## coded by Kevin L. Keys (2015)
-## klkeys@g.ucla.edu
-#function update_partial_residuals!(
-#	r       :: SharedArray{Float64,1}, 
-#	y       :: SharedArray{Float64,1}, 
-#	x       :: BEDFile, 
-#	indices :: BitArray{1}, 
-#	b       :: SharedArray{Float64,1}, 
-#	k       :: Int; 
-#	means   :: SharedArray{Float64,1} = mean(Float64,x, shared=true), 
-#	invstds :: SharedArray{Float64,1} = invstd(x,means, shared=true), 
-#	Xb      :: SharedArray{Float64,1} = xb(X,b,indices,k, means=means, invstds=invstds)
-#) 
-#	k <= length(b)    || throw(ArgumentError("k cannot exceed the length of b!"))
-##	k <= sum(indices) || throw(ArgumentError("k cannot exceed the number of true values in indices!"))
-#	length(r) == x.n  || throw(DimensionMismatch("r must have length $(x.n)!"))
-#	length(y) == x.n  || throw(DimensionMismatch("y must have length $(x.n)!"))
-#
-#	@sync @inbounds @parallel for i = 1:x.n
-#		r[i] = y[i] - Xb[i]
-#	end
-#
-#	return nothing 
-#end
-#
-#
-#
-#function update_partial_residuals!(
-#	r       :: SharedArray{Float32,1}, 
-#	y       :: SharedArray{Float32,1}, 
-#	x       :: BEDFile, 
-#	indices :: BitArray{1}, 
-#	b       :: SharedArray{Float32,1}, 
-#	k       :: Int; 
-#	means   :: SharedArray{Float32,1} = mean(Float32,x, shared=true), 
-#	invstds :: SharedArray{Float32,1} = invstd(x,means, shared=true), 
-#	Xb      :: SharedArray{Float32,1} = xb(X,b,indices,k, means=means, invstds=invstds)
-#) 
-#	k <= length(b)    || throw(ArgumentError("k cannot exceed the length of b!"))
-##	k <= sum(indices) || throw(ArgumentError("k cannot exceed the number of true values in indices!"))
-#	length(r) == x.n  || throw(DimensionMismatch("r must have length $(x.n)!"))
-#	length(y) == x.n  || throw(DimensionMismatch("y must have length $(x.n)!"))
-#
-#	@sync @inbounds @parallel for i = 1:x.n
-#		r[i] = y[i] - Xb[i]
-#	end
-#
-#	return nothing 
-#end
-#
-#function update_partial_residuals!(
-#	r       :: Array{Float64,1}, 
-#	y       :: Array{Float64,1}, 
-#	x       :: BEDFile, 
-#	indices :: BitArray{1}, 
-#	b       :: Array{Float64,1}, 
-#	k       :: Int; 
-#	means   :: Array{Float64,1} = mean(Float64,x, shared=false), 
-#	invstds :: Array{Float64,1} = invstd(x,means, shared=false), 
-#	Xb      :: Array{Float64,1} = xb(X,b,indices,k, means=means, invstds=invstds)
-#) 
-#	k <= length(b)    || throw(ArgumentError("k cannot exceed the length of b!"))
-##	k <= sum(indices) || throw(ArgumentError("k cannot exceed the number of true values in indices!"))
-#	length(r) == x.n  || throw(DimensionMismatch("r must have length $(x.n)!"))
-#	length(y) == x.n  || throw(DimensionMismatch("y must have length $(x.n)!"))
-#
-#	@inbounds for i = 1:x.n
-#		r[i] = y[i] - Xb[i]
-#	end
-#
-#	return nothing 
-#end
-#
-#function update_partial_residuals!(
-#	r       :: Array{Float32,1}, 
-#	y       :: Array{Float32,1}, 
-#	x       :: BEDFile, 
-#	indices :: BitArray{1}, 
-#	b       :: Array{Float32,1}, 
-#	k       :: Int; 
-#	means   :: Array{Float32,1} = mean(Float32,x, shared=false), 
-#	invstds :: Array{Float32,1} = invstd(x,means, shared=false), 
-#	Xb      :: Array{Float32,1} = xb(X,b,indices,k, means=means, invstds=invstds)
-#) 
-#	k <= length(b)    || throw(ArgumentError("k cannot exceed the length of b!"))
-##	k <= sum(indices) || throw(ArgumentError("k cannot exceed the number of true values in indices!"))
-#	length(r) == x.n  || throw(DimensionMismatch("r must have length $(x.n)!"))
-#	length(y) == x.n  || throw(DimensionMismatch("y must have length $(x.n)!"))
-#
-#	@inbounds for i = 1:x.n
-#		r[i] = y[i] - Xb[i]
-#	end
-#
-#	return nothing 
-#end
-
-
-
 
 # COMPUTE THE DOT PRODUCT OF A COLUMN OF X AGAINST Y
 #
@@ -637,7 +424,7 @@ function dot(
 	means   :: DenseVector{Float64}, 
 	invstds :: DenseVector{Float64}
 ) 
-	s = 0.0				# accumulation variable, will eventually equal dot(y,z)
+	s = zero(Float64)				# accumulation variable, will eventually equal dot(y,z)
 	m = means[snp]		# mean of SNP predictor
 	d = invstds[snp]	# 1/std of SNP predictor
 
@@ -648,7 +435,7 @@ function dot(
 			t = getindex(x,x.x,case,snp,x.blocksize)
 
 			# handle exceptions on t
-			t = ifelse(isnan(t), 0.0, t - m)
+			t = ifelse(isnan(t), zero(Float64), t - m)
 
 			# accumulate dot product
 			s += y[case] * t 
@@ -671,7 +458,7 @@ function dot(
 	means   :: DenseVector{Float32}, 
 	invstds :: DenseVector{Float32}
 ) 
-	s = 0.0f0			# accumulation variable, will eventually equal dot(y,z)
+	s = zero(Float32)			# accumulation variable, will eventually equal dot(y,z)
 	m = means[snp]		# mean of SNP predictor
 	d = invstds[snp]	# 1/std of SNP predictor
 
@@ -682,7 +469,7 @@ function dot(
 			t = getindex(x,x.x,case,snp,x.blocksize)
 
 			# handle exceptions on t
-			t = ifelse(isnan(t), 0.0, t - m)
+			t = ifelse(isnan(t), zero(Float64), t - m)
 
 			# accumulate dot product
 			s += y[case] * t 
@@ -707,7 +494,7 @@ function dot(
 	invstds :: DenseVector{Float64},
 	mask_n  :: DenseVector{Int}
 ) 
-	s = 0.0				# accumulation variable, will eventually equal dot(y,z)
+	s = zero(Float64)				# accumulation variable, will eventually equal dot(y,z)
 	m = means[snp]		# mean of SNP predictor
 	d = invstds[snp]	# 1/std of SNP predictor
 
@@ -721,7 +508,7 @@ function dot(
 				t = getindex(x,x.x,case,snp,x.blocksize)
 
 				# handle exceptions on t
-				t = ifelse(isnan(t), 0.0, t - m)
+				t = ifelse(isnan(t), zero(Float64), t - m)
 
 				# accumulate dot product
 				s += y[case] * t 
@@ -748,7 +535,7 @@ function dot(
 	invstds :: DenseVector{Float32},
 	mask_n  :: DenseVector{Int}
 ) 
-	s = 0.0f0			# accumulation variable, will eventually equal dot(y,z)
+	s = zero(Float32)			# accumulation variable, will eventually equal dot(y,z)
 	m = means[snp]		# mean of SNP predictor
 	d = invstds[snp]	# 1/std of SNP predictor
 
@@ -762,7 +549,7 @@ function dot(
 				t = getindex(x,x.x,case,snp,x.blocksize)
 
 				# handle exceptions on t
-				t = ifelse(isnan(t), 0.0f0, t - m)
+				t = ifelse(isnan(t), zero(Float32), t - m)
 
 				# accumulate dot product
 				s += y[case] * t 
@@ -808,8 +595,8 @@ function dott(
 	means   :: DenseVector{Float64}, 
 	invstds :: DenseVector{Float64}
 ) 
-	s = 0.0		# accumulation variable, will eventually equal dot(y,z)
-	t = 0.0		# store interpreted genotype
+	s = zero(Float64)		# accumulation variable, will eventually equal dot(y,z)
+	t = zero(Float64)		# store interpreted genotype
 #	@inbounds for snp = 1:x.p 
 	for snp = 1:x.p 
 
@@ -820,7 +607,7 @@ function dott(
 			t = getindex(x,x.xt,snp,case,x.tblocksize)
 
 			# handle exceptions on t
-			t = ifelse(isnan(t), 0.0, (t - means[snp]) * invstds[snp])
+			t = ifelse(isnan(t), zero(Float64), (t - means[snp]) * invstds[snp])
 
 			# accumulate dot product
 			s += b[snp] * t 
@@ -828,13 +615,7 @@ function dott(
 	end
 #	@inbounds for snp = (x.p+1):(x.p+x.p2)
 	for snp = (x.p+1):(x.p+x.p2)
-#		println("indices[$snp] = ", indices[snp])
-#		println("s = ", s)
 		if indices[snp]
-#			println("x.x2t = ", x.x2t[snp-x.p,case])
-#			println("means = ", means[snp])
-#			println("invstds = ", invstds[snp])
-#			println("b = ", b[snp])
 			s += b[snp] * (x.x2t[snp-x.p,case] - means[snp]) * invstds[snp] 
 		end
 	end
@@ -852,8 +633,8 @@ function dott(
 	means   :: DenseVector{Float32}, 
 	invstds :: DenseVector{Float32}
 ) 
-	s = 0.0f0		# accumulation variable, will eventually equal dot(y,z)
-	t = 0.0f0		# store interpreted genotype
+	s = zero(Float32)		# accumulation variable, will eventually equal dot(y,z)
+	t = zero(Float32)		# store interpreted genotype
 #	@inbounds for snp = 1:x.p 
 	for snp = 1:x.p 
 
@@ -864,7 +645,7 @@ function dott(
 			t = getindex(x,x.xt,snp,case,x.tblocksize)
 
 			# handle exceptions on t
-			t = ifelse(isnan(t), 0.0f0, (t - means[snp]) * invstds[snp])
+			t = ifelse(isnan(t), zero(Float32), (t - means[snp]) * invstds[snp])
 
 			# accumulate dot product
 			s += b[snp] * t 
@@ -915,7 +696,8 @@ function xb!(
 	k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
 
 	# loop over the desired number of predictors 
-	@sync @inbounds @parallel for case = 1:x.n
+#	@sync @inbounds @parallel for case = 1:x.n
+	for case = 1:x.n
 		Xb[case] = dott(x, b, case, indices, means, invstds)	
 	end
 
@@ -937,7 +719,8 @@ function xb!(
 	k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
 
 	# loop over the desired number of predictors 
-	@sync @inbounds @parallel for case = 1:x.n
+#	@sync @inbounds @parallel for case = 1:x.n
+	for case = 1:x.n
 		Xb[case] = dott(x, b, case, indices, means, invstds)	
 	end
 
@@ -968,7 +751,6 @@ function xb!(
 #	@sync @parallel for case = 1:x.n
 	for case = 1:x.n
 		if mask_n[case] == 1
-#			println("xb!: process $(myid()) adding $case")
 			Xb[case] = dott(x, b, case, indices, means, invstds)	
 		end
 	end
@@ -983,7 +765,8 @@ function xb!(
 	k       :: Int,
 	mask_n  :: DenseVector{Int};
 	means   :: DenseVector{Float32} = mean(Float32,x), 
-	invstds :: DenseVector{Float32} = invstd(x,means)
+	invstds :: DenseVector{Float32} = invstd(x,means),
+	pids    :: DenseVector{Int}     = procs()
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
@@ -992,7 +775,7 @@ function xb!(
 
 	# loop over the desired number of predictors 
 #	@sync @inbounds @parallel for case = 1:x.n
-	@sync @parallel for case = 1:x.n
+	for case = 1:x.n
 		if mask_n[case] == 1
 			Xb[case] = dott(x, b, case, indices, means, invstds)	
 		end
@@ -1021,11 +804,11 @@ end
 # klkeys@g.ucla.edu
 function xb(
 	x       :: BEDFile, 
-	b       :: Array{Float64,1}, 
+	b       :: Vector{Float64}, 
 	indices :: BitArray{1}, 
 	k       :: Int; 
-	means   :: Array{Float64,1} = mean(Float64,x, shared=false), 
-	invstds :: Array{Float64,1} = invstd(x,means, shared=false)
+	means   :: Vector{Float64} = mean(Float64,x, shared=false), 
+	invstds :: Vector{Float64} = invstd(x,means, shared=false)
 ) 
 	Xb = zeros(Float64,x.n)
 	xb!(Xb,x,b,indices,k, means=means, invstds=invstds)
@@ -1035,11 +818,11 @@ end
 
 function xb(
 	x       :: BEDFile, 
-	b       :: Array{Float32,1}, 
+	b       :: Vector{Float32}, 
 	indices :: BitArray{1}, 
 	k       :: Int; 
-	means   :: Array{Float32,1} = mean(Float32,x, shared=false), 
-	invstds :: Array{Float32,1} = invstd(x,means, shared=false)
+	means   :: Vector{Float32} = mean(Float32,x, shared=false), 
+	invstds :: Vector{Float32} = invstd(x,means, shared=false)
 ) 
 	Xb = zeros(Float32,x.n)
 	xb!(Xb,x,b,indices,k, means=means, invstds=invstds)
@@ -1048,13 +831,14 @@ end
 
 function xb(
 	x       :: BEDFile, 
-	b       :: SharedArray{Float64,1}, 
+	b       :: SharedVector{Float64}, 
 	indices :: BitArray{1}, 
 	k       :: Int; 
-	means   :: SharedArray{Float64,1} = mean(Float64,x, shared=true), 
-	invstds :: SharedArray{Float64,1} = invstd(x,means, shared=true)
+	pids    :: DenseVector{Int}       = procs(),
+	means   :: SharedVector{Float64} = mean(Float64,x, shared=true, pids=pids), 
+	invstds :: SharedVector{Float64} = invstd(x,means, shared=true, pids=pids)
 ) 
-	Xb = SharedArray(Float64, x.n, init = S -> S[localindexes(S)] = 0.0)
+	Xb = SharedArray(Float64, x.n, init = S -> S[localindexes(S)] = zero(Float64), pids=pids)
 	xb!(Xb,x,b,indices,k, means=means, invstds=invstds)
 	return Xb
 end
@@ -1062,28 +846,26 @@ end
 
 function xb(
 	x       :: BEDFile, 
-	b       :: SharedArray{Float32,1}, 
+	b       :: SharedVector{Float32}, 
 	indices :: BitArray{1}, 
 	k       :: Int; 
-	means   :: SharedArray{Float32,1} = mean(Float32,x, shared=true), 
-	invstds :: SharedArray{Float32,1} = invstd(x,means, shared=true)
+	pids    :: DenseVector{Int}       = procs(),
+	means   :: SharedVector{Float32} = mean(Float32,x, shared=true, pids=pids), 
+	invstds :: SharedVector{Float32} = invstd(x,means, shared=true, pids=pids)
 ) 
-	Xb = SharedArray(Float32, x.n, init = S -> S[localindexes(S)] = 0.0f0)
-	xb!(Xb,x,b,indices,k, means=means, invstds=invstds)
+	Xb = SharedArray(Float32, x.n, init = S -> S[localindexes(S)] = zero(Float32), pids=pids)
+	xb!(Xb,x,b,indices,k, means=means, invstds=invstds, pids=pids)
 	return Xb
 end
 
-
-
-
 function xb(
 	x       :: BEDFile, 
-	b       :: Array{Float64,1}, 
+	b       :: Vector{Float64}, 
 	indices :: BitArray{1}, 
 	k       :: Int,
 	mask_n  :: DenseVector{Int};
-	means   :: Array{Float64,1} = mean(Float64,x, shared=false), 
-	invstds :: Array{Float64,1} = invstd(x,means, shared=false)
+	means   :: Vector{Float64} = mean(Float64,x, shared=false), 
+	invstds :: Vector{Float64} = invstd(x,means, shared=false)
 ) 
 	Xb = zeros(Float64,x.n)
 	xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds)
@@ -1093,12 +875,12 @@ end
 
 function xb(
 	x       :: BEDFile, 
-	b       :: Array{Float32,1}, 
+	b       :: Vector{Float32}, 
 	indices :: BitArray{1}, 
 	k       :: Int,
 	mask_n  :: DenseVector{Int};
-	means   :: Array{Float32,1} = mean(Float32,x, shared=false), 
-	invstds :: Array{Float32,1} = invstd(x,means, shared=false)
+	means   :: Vector{Float32} = mean(Float32,x, shared=false), 
+	invstds :: Vector{Float32} = invstd(x,means, shared=false)
 ) 
 	Xb = zeros(Float32,x.n)
 	xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds)
@@ -1107,30 +889,32 @@ end
 
 function xb(
 	x       :: BEDFile, 
-	b       :: SharedArray{Float64,1}, 
+	b       :: SharedVector{Float64}, 
 	indices :: BitArray{1}, 
 	k       :: Int,
 	mask_n  :: DenseVector{Int};
-	means   :: SharedArray{Float64,1} = mean(Float64,x, shared=true), 
-	invstds :: SharedArray{Float64,1} = invstd(x,means, shared=true)
+	pids    :: DenseVector{Int}       = procs(),
+	means   :: SharedVector{Float64} = mean(Float64,x, shared=true, pids=pids), 
+	invstds :: SharedVector{Float64} = invstd(x,means, shared=true, pids=pids)
 ) 
-	Xb = SharedArray(Float64, x.n, init = S -> S[localindexes(S)] = 0.0)
-	xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds)
+	Xb = SharedArray(Float64, x.n, init = S -> S[localindexes(S)] = zero(Float64), pids=pids)
+	xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds, pids=pids)
 	return Xb
 end
 
 
 function xb(
 	x       :: BEDFile, 
-	b       :: SharedArray{Float32,1}, 
+	b       :: SharedVector{Float32}, 
 	indices :: BitArray{1}, 
 	k       :: Int,
 	mask_n  :: DenseVector{Int};
-	means   :: SharedArray{Float32,1} = mean(Float32,x, shared=true), 
-	invstds :: SharedArray{Float32,1} = invstd(x,means, shared=true)
+	pids    :: DenseVector{Int}       = procs(),
+	means   :: SharedVector{Float32} = mean(Float32,x, shared=true, pids=pids), 
+	invstds :: SharedVector{Float32} = invstd(x,means, shared=true, pids=pids)
 ) 
-	Xb = SharedArray(Float32, x.n, init = S -> S[localindexes(S)] = 0.0f0)
-	xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds)
+	Xb = SharedArray(Float32, x.n, init = S -> S[localindexes(S)] = zero(Float32), pids=pids)
+	xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds, pids=pids)
 	return Xb
 end
 
@@ -1138,7 +922,7 @@ end
 # PERFORM X'Y, OR A TRANSPOSED MATRIX-VECTOR PRODUCT
 #
 # This function performs a general matrix-vector multiply with a transposed matrix.
-# Compare the results to BLAS.gemv('T', 1.0, X, y, 0.0, Xty).
+# Compare the results to BLAS.gemv('T', 1.0, X, y, zero(Float64), Xty).
 #
 # Arguments:
 # -- Xty is the output vector to overwrite
@@ -1152,11 +936,12 @@ end
 # coded by Kevin L. Keys (2015)
 # klkeys@g.ucla.edu
 function xty!(
-	Xty     :: SharedArray{Float64,1}, 
+	Xty     :: SharedVector{Float64}, 
 	x       :: BEDFile, 
-	y       :: SharedArray{Float64,1}; 
-	means   :: SharedArray{Float64,1} = mean(Float64,x, shared=true), 
-	invstds :: SharedArray{Float64,1} = invstd(x,means, shared=true),
+	y       :: SharedVector{Float64}; 
+	pids    :: DenseVector{Int}       = procs(),
+	means   :: SharedVector{Float64} = mean(Float64,x, shared=true, pids=pids), 
+	invstds :: SharedVector{Float64} = invstd(x,means, shared=true, pids=pids),
 	p       :: Int = size(x,2) 
 ) 
 	# error checking
@@ -1164,7 +949,8 @@ function xty!(
 	x.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
 
 	# loop over the desired number of predictors 
-	@sync @inbounds @parallel for snp = 1:p
+#	@sync @inbounds @parallel for snp = 1:p
+	for snp = 1:p
 		Xty[snp] = dot(x,y,snp,means,invstds)
 	end
 	
@@ -1191,11 +977,12 @@ end
 
 
 function xty!(
-	Xty     :: SharedArray{Float32,1}, 
+	Xty     :: SharedVector{Float32}, 
 	x       :: BEDFile, 
-	y       :: SharedArray{Float32,1}; 
-	means   :: SharedArray{Float32,1} = mean(Float32,x, shared=true), 
-	invstds :: SharedArray{Float32,1} = invstd(x,means, shared=true),
+	y       :: SharedVector{Float32}; 
+	pids    :: DenseVector{Int}       = procs(),
+	means   :: SharedVector{Float32} = mean(Float32,x, shared=true, pids=pids), 
+	invstds :: SharedVector{Float32} = invstd(x,means, shared=true, pids=pids),
 	p       :: Int = size(x,2) 
 ) 
 	# error checking
@@ -1203,38 +990,19 @@ function xty!(
 	x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
 
 	# loop over the desired number of predictors 
-	@sync @inbounds @parallel for snp = 1:p
+#	@sync @inbounds @parallel for snp = 1:p
+	for snp = 1:p
 		Xty[snp] = dot(x,y,snp,means,invstds)
 	end
 	return nothing 
 end 
 
 function xty!(
-	Xty     :: Array{Float64,1}, 
+	Xty     :: Vector{Float64}, 
 	x       :: BEDFile, 
-	y       :: Array{Float64,1}; 
-	means   :: Array{Float64,1} = mean(Float64,x, shared=false), 
-	invstds :: Array{Float64,1} = invstd(x,means, shared=false),
-	p       :: Int = size(x,2) 
-) 
-	# error checking
-	x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
-	x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
-
-	# loop over the desired number of predictors 
-	@inbounds for snp = 1:p
-		Xty[snp] = dot(x,y,snp,means,invstds)
-	end
-	return nothing 
-end 
-
-
-function xty!(
-	Xty     :: Array{Float32,1}, 
-	x       :: BEDFile, 
-	y       :: Array{Float32,1}; 
-	means   :: Array{Float32,1} = mean(Float32,x, shared=false), 
-	invstds :: Array{Float32,1} = invstd(x,means, shared=false),
+	y       :: Vector{Float64}; 
+	means   :: Vector{Float64} = mean(Float64,x, shared=false), 
+	invstds :: Vector{Float64} = invstd(x,means, shared=false),
 	p       :: Int = size(x,2) 
 ) 
 	# error checking
@@ -1249,15 +1017,36 @@ function xty!(
 end 
 
 
+function xty!(
+	Xty     :: Vector{Float32}, 
+	x       :: BEDFile, 
+	y       :: Vector{Float32}; 
+	means   :: Vector{Float32} = mean(Float32,x, shared=false), 
+	invstds :: Vector{Float32} = invstd(x,means, shared=false),
+	p       :: Int = size(x,2) 
+) 
+	# error checking
+	x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
+	x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
+
+	# loop over the desired number of predictors 
+	@inbounds for snp = 1:p
+		Xty[snp] = dot(x,y,snp,means,invstds)
+	end
+	return nothing 
+end 
+
+
 
 
 function xty!(
-	Xty     :: SharedArray{Float64,1}, 
+	Xty     :: SharedVector{Float64}, 
 	x       :: BEDFile, 
-	y       :: SharedArray{Float64,1},
+	y       :: SharedVector{Float64},
 	mask_n  :: DenseVector{Int}; 
-	means   :: SharedArray{Float64,1} = mean(Float64,x, shared=true), 
-	invstds :: SharedArray{Float64,1} = invstd(x,means, shared=true),
+	pids    :: DenseVector{Int}       = procs(),
+	means   :: SharedVector{Float64} = mean(Float64,x, shared=true, pids=pids), 
+	invstds :: SharedVector{Float64} = invstd(x,means, shared=true, pids=pids),
 	p       :: Int = size(x,2) 
 ) 
 	# error checking
@@ -1265,7 +1054,8 @@ function xty!(
 	x.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
 
 	# loop over the desired number of predictors 
-	@sync @inbounds @parallel for snp = 1:p
+#	@sync @inbounds @parallel for snp = 1:p
+	for snp = 1:p
 		Xty[snp] = dot(x,y,snp,means,invstds,mask_n)
 	end
 	return nothing 
@@ -1273,12 +1063,13 @@ end
 
 
 function xty!(
-	Xty     :: SharedArray{Float32,1}, 
+	Xty     :: SharedVector{Float32}, 
 	x       :: BEDFile, 
-	y       :: SharedArray{Float32,1},
+	y       :: SharedVector{Float32},
 	mask_n  :: DenseVector{Int}; 
-	means   :: SharedArray{Float32,1} = mean(Float32,x, shared=true), 
-	invstds :: SharedArray{Float32,1} = invstd(x,means, shared=true),
+	pids    :: DenseVector{Int}       = procs(),
+	means   :: SharedVector{Float32} = mean(Float32,x, shared=true, pids=pids), 
+	invstds :: SharedVector{Float32} = invstd(x,means, shared=true, pids=pids),
 	p       :: Int = size(x,2) 
 ) 
 	# error checking
@@ -1286,19 +1077,20 @@ function xty!(
 	x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
 
 	# loop over the desired number of predictors 
-	@sync @inbounds @parallel for snp = 1:p
+#	@sync @inbounds @parallel for snp = 1:p
+	for snp = 1:p
 		Xty[snp] = dot(x,y,snp,means,invstds,mask_n)
 	end
 	return nothing 
 end 
 
 function xty!(
-	Xty     :: Array{Float64,1}, 
+	Xty     :: Vector{Float64}, 
 	x       :: BEDFile, 
-	y       :: Array{Float64,1},
+	y       :: Vector{Float64},
 	mask_n  :: DenseVector{Int}; 
-	means   :: Array{Float64,1} = mean(Float64,x, shared=false), 
-	invstds :: Array{Float64,1} = invstd(x,means, shared=false),
+	means   :: Vector{Float64} = mean(Float64,x, shared=false), 
+	invstds :: Vector{Float64} = invstd(x,means, shared=false),
 	p       :: Int = size(x,2) 
 ) 
 	# error checking
@@ -1314,12 +1106,12 @@ end
 
 
 function xty!(
-	Xty     :: Array{Float32,1}, 
+	Xty     :: Vector{Float32}, 
 	x       :: BEDFile, 
-	y       :: Array{Float32,1},
+	y       :: Vector{Float32},
 	mask_n  :: DenseVector{Int}; 
-	means   :: Array{Float32,1} = mean(Float32,x, shared=false), 
-	invstds :: Array{Float32,1} = invstd(x,means, shared=false),
+	means   :: Vector{Float32} = mean(Float32,x, shared=false), 
+	invstds :: Vector{Float32} = invstd(x,means, shared=false),
 	p       :: Int = size(x,2) 
 ) 
 	# error checking
@@ -1350,38 +1142,40 @@ end
 # coded by Kevin L. Keys (2015)
 # klkeys@g.ucla.edu
 function xty(
-	x::BEDFile, 
-	y::SharedArray{Float64,1}, 
+	x       :: BEDFile, 
+	y       :: SharedVector{Float64}, 
 	mask_n  :: DenseVector{Int}; 
-	means::SharedArray{Float64,1} = mean(Float64,x, shared=true), 
-	invstds::SharedArray{Float64,1} = invstd(x,means, shared=true)
+	pids    :: DenseVector{Int}       = procs(),
+	means   :: SharedVector{Float64} = mean(Float64,x, shared=true, pids=pids), 
+	invstds :: SharedVector{Float64} = invstd(x,means, shared=true, pids=pids)
 ) 
 	p = x.p + x.p2
-	Xty = SharedArray(Float64, p, init = S -> S[localindexes(S)] = zero(Float64))
-	xty!(Xty,x,y,mask_n, means=means, invstds=invstds, p=p) 
+	Xty = SharedArray(Float64, p, init = S -> S[localindexes(S)] = zero(Float64), pids=pids)
+	xty!(Xty,x,y,mask_n, means=means, invstds=invstds, p=p, pids=pids) 
 	return Xty
 end
 
 
 function xty(
-	x::BEDFile, 
-	y::SharedArray{Float32,1},
+	x       :: BEDFile, 
+	y       :: SharedVector{Float32},
 	mask_n  :: DenseVector{Int}; 
-	means::SharedArray{Float32,1} = mean(Float32,x, shared=true), 
-	invstds::SharedArray{Float32,1} = invstd(x,means, shared=true)
+	pids    :: DenseVector{Int}      = procs(),
+	means   :: SharedVector{Float32} = mean(Float32,x, shared=true, pids=pids), 
+	invstds :: SharedVector{Float32} = invstd(x,means, shared=true, pids=pids)
 ) 
 	p = x.p + x.p2
-	Xty = SharedArray(Float32, p, init = S -> S[localindexes(S)] = zero(Float32))
+	Xty = SharedArray(Float32, p, init = S -> S[localindexes(S)] = zero(Float32), pids=pids)
 	xty!(Xty,x,y,mask_n, means=means, invstds=invstds, p=p) 
 	return Xty
 end
 
 function xty(
 	x       :: BEDFile, 
-	y       :: Array{Float64,1},
+	y       :: Vector{Float64},
 	mask_n  :: DenseVector{Int}; 
-	means   :: Array{Float64,1} = mean(Float64,x, shared=false), 
-	invstds :: Array{Float64,1} = invstd(x,means, shared=false)
+	means   :: Vector{Float64} = mean(Float64,x, shared=false), 
+	invstds :: Vector{Float64} = invstd(x,means, shared=false)
 ) 
 	p = x.p + x.p2
 	Xty = zeros(Float64, p)
@@ -1392,10 +1186,10 @@ end
 
 function xty(
 	x       :: BEDFile, 
-	y       :: Array{Float32,1},
+	y       :: Vector{Float32},
 	mask_n  :: DenseVector{Int}; 
-	means   :: Array{Float32,1} = mean(Float32,x, shared=false), 
-	invstds :: Array{Float32,1} = invstd(x,means, shared=false)
+	means   :: Vector{Float32} = mean(Float32,x, shared=false), 
+	invstds :: Vector{Float32} = invstd(x,means, shared=false)
 ) 
 	p = x.p + x.p2
 	Xty = zeros(Float32, p)
