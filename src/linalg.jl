@@ -284,7 +284,7 @@ function mean(T::Type, x::BEDFile; shared::Bool = true, pids::DenseVector{Int} =
 end
 
 # for mean function, set default type to Float64
-mean(x::BEDFile; shared::Bool = true, pids::DenseVector{Int}) = mean(Float64, x, shared=shared, pids=pids)
+mean(x::BEDFile; shared::Bool = true, pids::DenseVector{Int} = procs()) = mean(Float64, x, shared=shared, pids=pids)
 
 function mean_col(T::Type, x::BEDFile, snp::Int)
 	s = zero(T)	# accumulation variable, will eventually equal mean(x,col) for current col 
