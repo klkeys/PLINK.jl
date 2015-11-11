@@ -233,10 +233,11 @@ function sumsq(
 	T       :: Type,
 	x       :: BEDFile; 
 	shared  :: Bool = true, 
-	means   :: DenseVector = mean(T, x, shared=shared), 
-	invstds :: DenseVector = invstd(x,means, shared=shared)
+	pids    :: DenseVector{Int} = procs(),
+	means   :: DenseVector = mean(T, x, shared=shared, pids=pids), 
+	invstds :: DenseVector = invstd(x,means, shared=shared, pids=pids)
 ) 
-	y = ifelse(shared, SharedArray(T, x.p + x.p2, init = S -> S[localindexes(S)] = zero(T)), zeros(T, x.p + x.p2))
+	y = ifelse(shared, SharedArray(T, x.p + x.p2, init = S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, x.p + x.p2))
 	sumsq!(y,x,means,invstds)
 	return y
 end
@@ -687,8 +688,9 @@ function xb!(
 	b       :: DenseVector{Float64}, 
 	indices :: BitArray{1}, 
 	k       :: Int; 
-	means   :: DenseVector{Float64} = mean(Float64,x), 
-	invstds :: DenseVector{Float64} = invstd(x,means)
+	pids    :: DenseVector{Int}     = procs(),
+	means   :: DenseVector{Float64} = mean(Float64,x, shared=true, pids=pids), 
+	invstds :: DenseVector{Float64} = invstd(x,means, shared=true, pids=pids),
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
@@ -710,8 +712,9 @@ function xb!(
 	b       :: DenseVector{Float32}, 
 	indices :: BitArray{1}, 
 	k       :: Int; 
-	means   :: DenseVector{Float32} = mean(Float32,x), 
-	invstds :: DenseVector{Float32} = invstd(x,means)
+	pids    :: DenseVector{Int}     = procs(),
+	means   :: DenseVector{Float64} = mean(Float64,x, shared=true, pids=pids), 
+	invstds :: DenseVector{Float64} = invstd(x,means, shared=true, pids=pids),
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
@@ -736,10 +739,10 @@ function xb!(
 	indices :: BitArray{1}, 
 	k       :: Int,
 	mask_n  :: DenseVector{Int};
-	means   :: DenseVector{Float64} = mean(Float64,x, shared=true), 
-	invstds :: DenseVector{Float64} = invstd(x,means, shared=true),
-	n       :: Int                  = length(Xb),
-	pids    :: DenseVector{Int}     = procs()
+	pids    :: DenseVector{Int}     = procs(),
+	means   :: DenseVector{Float64} = mean(Float64,x, shared=true, pids=pids), 
+	invstds :: DenseVector{Float64} = invstd(x,means, shared=true, pids=pids),
+	n       :: Int                  = length(Xb)
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
@@ -764,9 +767,9 @@ function xb!(
 	indices :: BitArray{1}, 
 	k       :: Int,
 	mask_n  :: DenseVector{Int};
-	means   :: DenseVector{Float32} = mean(Float32,x), 
-	invstds :: DenseVector{Float32} = invstd(x,means),
-	pids    :: DenseVector{Int}     = procs()
+	pids    :: DenseVector{Int}     = procs(),
+	means   :: DenseVector{Float32} = mean(Float32,x, shared=true, pids=pids), 
+	invstds :: DenseVector{Float32} = invstd(x,means, shared=true, pids=pids),
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
@@ -834,7 +837,7 @@ function xb(
 	b       :: SharedVector{Float64}, 
 	indices :: BitArray{1}, 
 	k       :: Int; 
-	pids    :: DenseVector{Int}       = procs(),
+	pids    :: DenseVector{Int}      = procs(),
 	means   :: SharedVector{Float64} = mean(Float64,x, shared=true, pids=pids), 
 	invstds :: SharedVector{Float64} = invstd(x,means, shared=true, pids=pids)
 ) 
@@ -893,7 +896,7 @@ function xb(
 	indices :: BitArray{1}, 
 	k       :: Int,
 	mask_n  :: DenseVector{Int};
-	pids    :: DenseVector{Int}       = procs(),
+	pids    :: DenseVector{Int}      = procs(),
 	means   :: SharedVector{Float64} = mean(Float64,x, shared=true, pids=pids), 
 	invstds :: SharedVector{Float64} = invstd(x,means, shared=true, pids=pids)
 ) 
@@ -909,7 +912,7 @@ function xb(
 	indices :: BitArray{1}, 
 	k       :: Int,
 	mask_n  :: DenseVector{Int};
-	pids    :: DenseVector{Int}       = procs(),
+	pids    :: DenseVector{Int}      = procs(),
 	means   :: SharedVector{Float32} = mean(Float32,x, shared=true, pids=pids), 
 	invstds :: SharedVector{Float32} = invstd(x,means, shared=true, pids=pids)
 ) 
@@ -939,7 +942,7 @@ function xty!(
 	Xty     :: SharedVector{Float64}, 
 	x       :: BEDFile, 
 	y       :: SharedVector{Float64}; 
-	pids    :: DenseVector{Int}       = procs(),
+	pids    :: DenseVector{Int}      = procs(),
 	means   :: SharedVector{Float64} = mean(Float64,x, shared=true, pids=pids), 
 	invstds :: SharedVector{Float64} = invstd(x,means, shared=true, pids=pids),
 	p       :: Int = size(x,2) 
@@ -954,7 +957,7 @@ function xty!(
 		Xty[snp] = dot(x,y,snp,means,invstds)
 	end
 	
-#    np = nprocs()  # determine the number of processes available
+#    np = length(pids)  # determine the number of processes available
 #    i = 1
 #    nextidx() = (idx=i; i+=1; idx)
 #    @sync begin
