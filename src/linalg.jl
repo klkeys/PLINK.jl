@@ -258,28 +258,18 @@ end
 # klkeys@g.ucla.edu
 function mean(T::Type, x::BEDFile; shared::Bool = true, pids::DenseVector{Int} = procs())
 
-	# enforce floating point type
-#	@compat T <: Union{Float32, Float64} || throw(ArgumentError("Type must be Float32 or Float64"))
-
 	# initialize return vector
 	y = ifelse(shared, SharedArray(T, x.p + x.p2, init= S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, x.p + x.p2))
 
-	if shared
-		@sync @inbounds @parallel for snp = 1:x.p
-			y[snp] = mean_col(T,x,snp)
-		end
-	else
-		@inbounds  for snp = 1:x.p
-			y[snp] = mean_col(T,x,snp)
-		end
+	@inbounds for snp = 1:x.p
+		y[snp] = mean_col(T,x,snp)
 	end
 	for i = 1:x.p2 
 		@inbounds for j = 1:x.n
 			y[x.p + i] += x.x2[j,i]
 		end
-		y[i] /= x.n
+		y[x.p + i] /= x.n
 	end
-
 	return y
 end
 
@@ -328,49 +318,41 @@ mean_col(x::BEDFile, snp::Int) = mean_col(Float64, x, snp)
 ### WARNING: need to fix type assertions here!
 function invstd(x::BEDFile, means::DenseVector{Float64}; shared::Bool = true, pids::DenseVector{Int} = procs()) 
 
+	# check bounds
+	x.p + x.p2 == length(means) || throw(BoundsError("length(means) != size(x,2)"))
+
 	# initialize return vector
 	z = ifelse(shared, SharedArray(Float64, x.p + x.p2, init = S -> S[localindexes(S)] = zero(Float64), pids=pids), zeros(Float64, x.p + x.p2))
 
-#	if shared
-#		@sync @inbounds @parallel for snp = 1:x.p
-#			z[snp] = invstd_col(Float64, x, snp, means)
-#		end
-#	else
-		@inbounds  for snp = 1:x.p
-			z[snp] = invstd_col(Float64, x, snp, means)
-		end
-#	end
-	for i = 1:x.p2 
-		for j = 1:x.n
-			@inbounds z[x.p + i] += (x.x2[j,i] - means[x.p + i])^2
-		end
-		z[i] /= x.n
+	@inbounds  for snp = 1:x.p
+		z[snp] = invstd_col(Float64, x, snp, means)
 	end
-
+	@inbounds for i = 1:x.p2 
+		for j = 1:x.n
+			z[x.p + i] += (x.x2[j,i] - means[x.p + i])^2
+		end
+		z[x.p + i] = sqrt((x.n - 1) / z[x.p + i])
+	end
 	return z
 end
 
 function invstd(x::BEDFile, means::DenseVector{Float32}; shared::Bool = true, pids::DenseVector{Int} = procs())  
 
+	# check bounds
+	x.p + x.p2 == length(means) || throw(BoundsError("length(means) != size(x,2)"))
+
 	# initialize return vector
 	z = ifelse(shared, SharedArray(Float32, x.p + x.p2, init = S -> S[localindexes(S)] = zero(Float32), pids=pids), zeros(Float32, x.p + x.p2))
 
-#	if shared
-#		@sync @inbounds @parallel for snp = 1:x.p
-#			z[snp] = invstd_col(Float32, x, snp, means)
-#		end
-#	else
-		@inbounds  for snp = 1:x.p
-			z[snp] = invstd_col(Float32, x, snp, means)
-		end
-#	end
-	for i = 1:x.p2 
-		for j = 1:x.n
-			@inbounds z[x.p + i] += (x.x2[j,i] - means[x.p + i])^2
-		end
-		z[i] /= x.n
+	@inbounds  for snp = 1:x.p
+		z[snp] = invstd_col(Float32, x, snp, means)
 	end
-
+	@inbounds for i = 1:x.p2 
+		for j = 1:x.n
+			z[x.p + i] += (x.x2[j,i] - means[x.p + i])^2
+		end
+		z[x.p + i] = sqrt((x.n - 1) / z[x.p + i])
+	end
 	return z
 end
 
@@ -1148,7 +1130,7 @@ function xty(
 	x       :: BEDFile, 
 	y       :: SharedVector{Float64}, 
 	mask_n  :: DenseVector{Int}; 
-	pids    :: DenseVector{Int}       = procs(),
+	pids    :: DenseVector{Int}      = procs(),
 	means   :: SharedVector{Float64} = mean(Float64,x, shared=true, pids=pids), 
 	invstds :: SharedVector{Float64} = invstd(x,means, shared=true, pids=pids)
 ) 
