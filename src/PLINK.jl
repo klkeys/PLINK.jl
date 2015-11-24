@@ -1,9 +1,9 @@
 module PLINK
 
-using StatsBase: logistic, softplus 
+using StatsBase: logistic, softplus
 using OpenCL
 
-import Base.size 
+import Base.size
 import Base.==
 import Base.isequal
 import Base.mean
@@ -41,38 +41,37 @@ const MNUM1  = convert(Int8,108)
 const MNUM2  = convert(Int8,27)
 #const MNUM2  = convert(Int8,-85)
 
-# SWITCH TO INTERPRET BIT-REPRESENTATION OF GENOTYPES
-#
-# This lookup table encodes the following PLINK format for genotypes:
-#
-# -- 00 is homozygous for allele 1
-# -- 01 is heterozygous
-# -- 10 is missing
-# -- 11 is homozygous for allele 2
-# 
-# The idea is to map 00 to -1, 11 to 1, and 01 to 0.
-# Since we cannot use 01, we will map it to NaN.
-# Further note that the bytes are read from right to left.
-# That is, if we label each of the 8 position as A to H, we would label backwards:
-#
-#     01101100
-#     HGFEDCBA
-#
-# and so the first four genotypes are read as follows:
-#
-#     01101100
-#     HGFEDCBA
-#
-#           AB   00  -- homozygote (first)
-#         CD     11  -- other homozygote (second)
-#       EF       01  -- heterozygote (third)
-#     GH         10  -- missing genotype (fourth)
-#
-# Finally, when we reach the end of a SNP (or if in individual-mode, the end of an individual),
-# then we skip to the start of a new byte (i.e. skip any remaining bits in that byte). 
-# For a precise desceiption of PLINK BED files, see the file type reference at
-# http://pngu.mgh.harvard.edu/~purcell/plink/binary.shtml
-const geno32 = [0f0, NaN32, 1.f0, 2f0]
+"""
+This lookup table encodes the following PLINK format for genotypes:
+
+- 00 is homozygous for allele 1
+- 01 is heterozygous
+- 10 is missing
+- 11 is homozygous for allele 2
+
+The idea is to map 00 to -1, 11 to 1, and 01 to 0.
+Since we cannot use 01, we will map it to NaN.
+Further note that the bytes are read from right to left.
+That is, if we label each of the 8 position as A to H, we would label backwards:
+
+    01101100
+    HGFEDCBA
+
+and so the first four genotypes are read as follows:
+
+    01101100
+    HGFEDCBA
+
+          AB   00  -> homozygote (first)
+        CD     11  -> other homozygote (second)
+      EF       01  -> heterozygote (third)
+    GH         10  -> missing genotype (fourth)
+
+Finally, when we reach the end of a SNP (or if in individual-mode, the end of an individual),
+then we skip to the start of a new byte (i.e. skip any remaining bits in that byte).
+For a precise desceiption of PLINK BED files, see the file type reference in the [PLINK documentation](http://pngu.mgh.harvard.edu/~purcell/plink/binary.shtml).
+"""
+const geno32 = [0.0f0, NaN32, 1.0f0, 2.0f0]
 const geno64 = [0.0, NaN, 1.0, 2.0]
 
 include("bedfile.jl")
@@ -81,11 +80,4 @@ include("gpu32.jl")
 include("gpu64.jl")
 include("linalg.jl")
 
-
-
-
-
-
-
-
-end	# end module PLINK
+end # end module PLINK
