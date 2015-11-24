@@ -91,135 +91,12 @@ end
 
 
 """
-    decompress_genotypes!(y,x,snp,means,invstds)
-
-
-This function decompresses into `y` a standardized column (SNP) of a PLINK BED file housed in `x`.
-Missing genotypes are sent to zero.
-
-Arguments:
-
-- `y` is the matrix to fill with (standardized) dosages.
-- `x` is the BEDfile object that contains the compressed `n` x `p` design matrix.
-- `snp` is the current SNP (predictor) to extract.
-- `means` is an array of column means for `x`.
-- `invstds` is an array of column precisions for `x`.
-"""
-function decompress_genotypes!(
-    y       :: DenseVector{Float64},
-    x       :: BEDFile,
-    snp     :: Int,
-    means   :: DenseVector{Float64},
-    invstds :: DenseVector{Float64}
-)
-    m = means[snp]
-    d = invstds[snp]
-    t = zero(Float64)
-    if snp <= x.p
-        @inbounds for case = 1:x.n
-            t       = getindex(x,x.x,case,snp,x.blocksize)
-            y[case] = ifelse(isnan(t), 0.0, (t - m)*d)
-        end
-    else
-        @inbounds for case = 1:x.n
-            y[case] = (x.x2[case,(snp-x.p)] - m) * d
-        end
-    end
-    return nothing
-end
-
-
-function decompress_genotypes!(
-    y       :: DenseVector{Float32},
-    x       :: BEDFile,
-    snp     :: Int,
-    means   :: DenseVector{Float32},
-    invstds :: DenseVector{Float32}
-)
-    m = means[snp]
-    d = invstds[snp]
-    t = zero(Float32)
-    if snp <= x.p
-        @inbounds for case = 1:x.n
-            t       = getindex(x,x.x,case,snp,x.blocksize, float32=true)
-            y[case] = ifelse(isnan(t), 0.0f0, (t - m)*d)
-        end
-    else
-        @inbounds for case = 1:x.n
-            y[case] = (x.x2[case,(snp-x.p)] - m) * d
-        end
-    end
-    return nothing
-end
-
-
-"""
-    decompress_genotypes(x, snp, means, invstds [, shared=true, pids=procs()])
-
-This function decompresses from `x` a column of genotypes corresponding to a single SNP from a PLINK BED file.
-It returns the standardized column of decompressed genotypes.
-
-Arguments:
-
-- `x` is the `BEDFile` object that contains the compressed `n` x `p` design matrix.
-- `snp` is the SNP to decompress.
-- `means` is a vector of the column means of `x`.
-- `invstds` is a vector of the column precisions of `x`.
-
-Optional Arguments:
-
-- `shared` controls whether or not to return a `SharedArray`. Defaults to `true` (return a SharedArray), otherwise `decompress_genotypes` returns an `Array`.
-- `pids` controls the processes to which the output `SharedArray` is distributed. Defaults to `procs()`. `pids` has no effect if `shared = false`.
-
-Output:
-
-- A vector of type `SharedArray` (or `Array` when `shared = false`) containing standardized allele dosages from column `snp` of `BEDFile` object `x`.
-"""
-function decompress_genotypes(
-    x       :: BEDFile,
-    snp     :: Int,
-    means   :: DenseVector{Float64},
-    invstds :: DenseVector{Float64};
-    shared  :: Bool = true,
-    pids    :: DenseVector{Int} = procs()
-)
-    y = ifelse(shared, SharedArray(Float64, x.n, init = S -> S[localindexes(S)] = zero(Float64), pids=pids), zeros(Float64,x.n))
-    decompress_genotypes!(y,x,snp,means,invstds)
-    return y
-end
-
-
-function decompress_genotypes(
-    x       :: BEDFile,
-    snp     :: Int,
-    means   :: DenseVector{Float32},
-    invstds :: DenseVector{Float32};
-    shared  :: Bool = true,
-    pids    :: DenseVector{Int} = procs()
-)
-    y = ifelse(shared, SharedArray(Float32, x.n, init = S -> S[localindexes(S)] = zero(Float32), pids=pids), zeros(Float32,x.n))
-    decompress_genotypes!(y,x,snp,means,invstds)
-    return y
-end
-
-
-"""
     decompress_genotypes!(Y, x, means, invstds [, standardize=true])
 
 
-Decompress and standardize genotypes from a `BEDFile` object `x` into a floating point matrix `Y`.
+Can also be called with a matrix `Y`, in which case all genotypes are decompressed.
 Use this function judiciously, since the memory demands from decompressing large portions of `x` can grow quite large.
-
-Arguments:
-
-- `Y` is the matrix to fill with decompressed genotypes.
-- `x` is the `BEDFile` object that contains the compressed `n` x `p` design matrix.
-- `means` is a vector of columns means of `x`.
-- `invstds` is a vector of column precisions of `x`.
-
-Optional Arguments:
-
-- `standardize` is a `Bool` to control standardization of allele dosages. Defaults to `true`.
+Use optional argument `standardize` to control standardization of allele dosages.
 """
 function decompress_genotypes!(
     Y           :: DenseMatrix{Float64},
@@ -291,6 +168,7 @@ function decompress_genotypes!(
 
     return nothing
 end
+
 
 """
     decompress_genotypes!(Y, x, indices, means, invstds)
@@ -517,6 +395,7 @@ function decompress_genotypes!(
 end
 
 
+
 """
     decompress_genotypes!(Y, x, indices, mask_n [,pids=procs(), means=mean(Float64,x,shared=true,pids=pids), invstds=(x,means,shared=true,pids=pids)])
 
@@ -650,6 +529,69 @@ function decompress_genotypes!(
 
             # quit when Y is filled
             current_col == p && return nothing
+        end
+    end
+    return nothing
+end
+
+
+"""
+    decompress_genotypes!(y,x,snp,means,invstds)
+
+
+This function decompresses into vector `y` a standardized column (SNP) of a PLINK BED file housed in `x`.
+Missing genotypes are sent to zero.
+
+Arguments:
+
+- `y` is the matrix to fill with (standardized) dosages.
+- `x` is the BEDfile object that contains the compressed `n` x `p` design matrix.
+- `snp` is the current SNP (predictor) to extract.
+- `means` is an array of column means for `x`.
+- `invstds` is an array of column precisions for `x`.
+"""
+function decompress_genotypes!(
+    y       :: DenseVector{Float64},
+    x       :: BEDFile,
+    snp     :: Int,
+    means   :: DenseVector{Float64},
+    invstds :: DenseVector{Float64}
+)
+    m = means[snp]
+    d = invstds[snp]
+    t = zero(Float64)
+    if snp <= x.p
+        @inbounds for case = 1:x.n
+            t       = getindex(x,x.x,case,snp,x.blocksize)
+            y[case] = ifelse(isnan(t), 0.0, (t - m)*d)
+        end
+    else
+        @inbounds for case = 1:x.n
+            y[case] = (x.x2[case,(snp-x.p)] - m) * d
+        end
+    end
+    return nothing
+end
+
+
+function decompress_genotypes!(
+    y       :: DenseVector{Float32},
+    x       :: BEDFile,
+    snp     :: Int,
+    means   :: DenseVector{Float32},
+    invstds :: DenseVector{Float32}
+)
+    m = means[snp]
+    d = invstds[snp]
+    t = zero(Float32)
+    if snp <= x.p
+        @inbounds for case = 1:x.n
+            t       = getindex(x,x.x,case,snp,x.blocksize, float32=true)
+            y[case] = ifelse(isnan(t), 0.0f0, (t - m)*d)
+        end
+    else
+        @inbounds for case = 1:x.n
+            y[case] = (x.x2[case,(snp-x.p)] - m) * d
         end
     end
     return nothing

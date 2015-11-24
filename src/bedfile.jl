@@ -16,9 +16,9 @@ Fields:
 - `p2` is the number of nongenetic covariates.
 - `x2t = x2'`.
 
-Note that this BEDFile object, and the rest of this module for that matter, operate with the assumption
-that the compressed matrix is in column-major (SNP-major) format.
-Row-major (case-major) format is not supported.
+Note this BEDFile object, and the rest of this module for that matter, operate with the assumption
+that the compressed matrix `x` is in column-major (SNP-major) format.
+Row-major (case-major) format is used in the field `xt` but is not supported _per se_.
 """
 type BEDFile
     x   :: SharedVector{Int8}
