@@ -76,8 +76,8 @@ const geno64 = [0.0, NaN, 1.0, 2.0]
 
 include("bedfile.jl")
 include("decompression.jl")
-include("gpu32.jl")
 include("gpu64.jl")
+include("gpu32.jl")
 include("linalg.jl")
 
 end # end module PLINK

@@ -662,6 +662,66 @@ end
 
 
 """
+    xb!(Xb, x, b, indices, k, mask_n [, pids=procs(), means, invstds])
+
+Can also be called with a bitmask vector `mask_n` containins `0`s and `1`s which excludes or includes (respectively) elements of `x` and `b` from the dot product.
+"""
+function xb!(
+    Xb      :: DenseVector{Float64},
+    x       :: BEDFile,
+    b       :: DenseVector{Float64},
+    indices :: BitArray{1},
+    k       :: Int,
+    mask_n  :: DenseVector{Int};
+    pids    :: DenseVector{Int}     = procs(),
+    means   :: DenseVector{Float64} = mean(Float64,x, shared=true, pids=pids),
+    invstds :: DenseVector{Float64} = invstd(x,means, shared=true, pids=pids),
+    n       :: Int                  = length(Xb)
+)
+    # error checking
+    0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
+#   k <= sum(indices)   || throw(ArgumentError("k != sum(indices)"))
+    k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
+
+    # loop over the desired number of predictors
+#   @sync @inbounds @parallel for case = 1:x.n
+#   @sync @parallel for case = 1:x.n
+    for case = 1:x.n
+        if mask_n[case] == 1
+            Xb[case] = dott(x, b, case, indices, means, invstds)
+        end
+    end
+    return nothing
+end
+
+function xb!(
+    Xb      :: DenseVector{Float32},
+    x       :: BEDFile,
+    b       :: DenseVector{Float32},
+    indices :: BitArray{1},
+    k       :: Int,
+    mask_n  :: DenseVector{Int};
+    pids    :: DenseVector{Int}     = procs(),
+    means   :: DenseVector{Float32} = mean(Float32,x, shared=true, pids=pids),
+    invstds :: DenseVector{Float32} = invstd(x,means, shared=true, pids=pids),
+)
+    # error checking
+    0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
+#   k <= sum(indices)   || throw(ArgumentError("k != sum(indices)"))
+    k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
+
+    # loop over the desired number of predictors
+#   @sync @inbounds @parallel for case = 1:x.n
+    for case = 1:x.n
+        if mask_n[case] == 1
+            Xb[case] = dott(x, b, case, indices, means, invstds)
+        end
+    end
+
+    return nothing
+end
+
+"""
     xb!(Xb, x, b, indices, k [, pids=procs(), means, invstds])
 
 This function computes the operation `x*b` for the compressed `n` x `p` design matrix from a `BEDFile` object.
@@ -732,61 +792,71 @@ end
 
 
 
-function xb!(
-    Xb      :: DenseVector{Float64},
+
+"""
+    xb(x, b, indices, k, mask_n [, pids=procs(), means, invstds])
+
+Can also be called with a bitmask vector `mask_n` containins `0`s and `1`s which excludes or includes (respectively) elements of `x` and `b` from the dot product.
+"""
+function xb(
     x       :: BEDFile,
-    b       :: DenseVector{Float64},
+    b       :: Vector{Float64},
     indices :: BitArray{1},
     k       :: Int,
     mask_n  :: DenseVector{Int};
-    pids    :: DenseVector{Int}     = procs(),
-    means   :: DenseVector{Float64} = mean(Float64,x, shared=true, pids=pids),
-    invstds :: DenseVector{Float64} = invstd(x,means, shared=true, pids=pids),
-    n       :: Int                  = length(Xb)
+    means   :: Vector{Float64} = mean(Float64,x, shared=false),
+    invstds :: Vector{Float64} = invstd(x,means, shared=false)
 )
-    # error checking
-    0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
-#   k <= sum(indices)   || throw(ArgumentError("k != sum(indices)"))
-    k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
-
-    # loop over the desired number of predictors
-#   @sync @inbounds @parallel for case = 1:x.n
-#   @sync @parallel for case = 1:x.n
-    for case = 1:x.n
-        if mask_n[case] == 1
-            Xb[case] = dott(x, b, case, indices, means, invstds)
-        end
-    end
-    return nothing
+    Xb = zeros(Float64,x.n)
+    xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds)
+    return Xb
 end
 
-function xb!(
-    Xb      :: DenseVector{Float32},
+
+function xb(
     x       :: BEDFile,
-    b       :: DenseVector{Float32},
+    b       :: Vector{Float32},
     indices :: BitArray{1},
     k       :: Int,
     mask_n  :: DenseVector{Int};
-    pids    :: DenseVector{Int}     = procs(),
-    means   :: DenseVector{Float32} = mean(Float32,x, shared=true, pids=pids),
-    invstds :: DenseVector{Float32} = invstd(x,means, shared=true, pids=pids),
+    means   :: Vector{Float32} = mean(Float32,x, shared=false),
+    invstds :: Vector{Float32} = invstd(x,means, shared=false)
 )
-    # error checking
-    0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
-#   k <= sum(indices)   || throw(ArgumentError("k != sum(indices)"))
-    k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
-
-    # loop over the desired number of predictors
-#   @sync @inbounds @parallel for case = 1:x.n
-    for case = 1:x.n
-        if mask_n[case] == 1
-            Xb[case] = dott(x, b, case, indices, means, invstds)
-        end
-    end
-
-    return nothing
+    Xb = zeros(Float32,x.n)
+    xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds)
+    return Xb
 end
 
+function xb(
+    x       :: BEDFile,
+    b       :: SharedVector{Float64},
+    indices :: BitArray{1},
+    k       :: Int,
+    mask_n  :: DenseVector{Int};
+    pids    :: DenseVector{Int}      = procs(),
+    means   :: SharedVector{Float64} = mean(Float64,x, shared=true, pids=pids),
+    invstds :: SharedVector{Float64} = invstd(x,means, shared=true, pids=pids)
+)
+    Xb = SharedArray(Float64, x.n, init = S -> S[localindexes(S)] = zero(Float64), pids=pids)
+    xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds, pids=pids)
+    return Xb
+end
+
+
+function xb(
+    x       :: BEDFile,
+    b       :: SharedVector{Float32},
+    indices :: BitArray{1},
+    k       :: Int,
+    mask_n  :: DenseVector{Int};
+    pids    :: DenseVector{Int}      = procs(),
+    means   :: SharedVector{Float32} = mean(Float32,x, shared=true, pids=pids),
+    invstds :: SharedVector{Float32} = invstd(x,means, shared=true, pids=pids)
+)
+    Xb = SharedArray(Float32, x.n, init = S -> S[localindexes(S)] = zero(Float32), pids=pids)
+    xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds, pids=pids)
+    return Xb
+end
 
 """
     xb(x, b, indices, k [, pids=procs(), means, invstds])
@@ -866,71 +936,98 @@ function xb(
     return Xb
 end
 
+
+
 """
-    xb(x, b, indices, k, mask_n [, pids=procs(), means, invstds])
+    xty!(Xty, x, y, mask_n, [, pids=procs(), means, invstds, p=size(x,2)])
 
 Can also be called with a bitmask vector `mask_n` containins `0`s and `1`s which excludes or includes (respectively) elements of `x` and `b` from the dot product.
 """
-function xb(
+function xty!(
+    Xty     :: SharedVector{Float64},
     x       :: BEDFile,
-    b       :: Vector{Float64},
-    indices :: BitArray{1},
-    k       :: Int,
+    y       :: SharedVector{Float64},
+    mask_n  :: DenseVector{Int};
+    pids    :: DenseVector{Int}       = procs(),
+    means   :: SharedVector{Float64} = mean(Float64,x, shared=true, pids=pids),
+    invstds :: SharedVector{Float64} = invstd(x,means, shared=true, pids=pids),
+    p       :: Int = size(x,2)
+)
+    # error checking
+    p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
+    x.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
+
+    # loop over the desired number of predictors
+#   @sync @inbounds @parallel for snp = 1:p
+    for snp = 1:p
+        Xty[snp] = dot(x,y,snp,means,invstds,mask_n)
+    end
+    return nothing
+end
+
+
+function xty!(
+    Xty     :: SharedVector{Float32},
+    x       :: BEDFile,
+    y       :: SharedVector{Float32},
+    mask_n  :: DenseVector{Int};
+    pids    :: DenseVector{Int}       = procs(),
+    means   :: SharedVector{Float32} = mean(Float32,x, shared=true, pids=pids),
+    invstds :: SharedVector{Float32} = invstd(x,means, shared=true, pids=pids),
+    p       :: Int = size(x,2)
+)
+    # error checking
+    x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
+    x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
+
+    # loop over the desired number of predictors
+#   @sync @inbounds @parallel for snp = 1:p
+    for snp = 1:p
+        Xty[snp] = dot(x,y,snp,means,invstds,mask_n)
+    end
+    return nothing
+end
+
+function xty!(
+    Xty     :: Vector{Float64},
+    x       :: BEDFile,
+    y       :: Vector{Float64},
     mask_n  :: DenseVector{Int};
     means   :: Vector{Float64} = mean(Float64,x, shared=false),
-    invstds :: Vector{Float64} = invstd(x,means, shared=false)
+    invstds :: Vector{Float64} = invstd(x,means, shared=false),
+    p       :: Int = size(x,2)
 )
-    Xb = zeros(Float64,x.n)
-    xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds)
-    return Xb
+    # error checking
+    x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
+    x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
+
+    # loop over the desired number of predictors
+    @inbounds for snp = 1:p
+        Xty[snp] = dot(x,y,snp,means,invstds,mask_n)
+    end
+    return nothing
 end
 
 
-function xb(
+function xty!(
+    Xty     :: Vector{Float32},
     x       :: BEDFile,
-    b       :: Vector{Float32},
-    indices :: BitArray{1},
-    k       :: Int,
+    y       :: Vector{Float32},
     mask_n  :: DenseVector{Int};
     means   :: Vector{Float32} = mean(Float32,x, shared=false),
-    invstds :: Vector{Float32} = invstd(x,means, shared=false)
+    invstds :: Vector{Float32} = invstd(x,means, shared=false),
+    p       :: Int = size(x,2)
 )
-    Xb = zeros(Float32,x.n)
-    xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds)
-    return Xb
+    # error checking
+    x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
+    x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
+
+    # loop over the desired number of predictors
+    @inbounds for snp = 1:p
+        Xty[snp] = dot(x,y,snp,means,invstds,mask_n)
+    end
+    return nothing
 end
-
-function xb(
-    x       :: BEDFile,
-    b       :: SharedVector{Float64},
-    indices :: BitArray{1},
-    k       :: Int,
-    mask_n  :: DenseVector{Int};
-    pids    :: DenseVector{Int}      = procs(),
-    means   :: SharedVector{Float64} = mean(Float64,x, shared=true, pids=pids),
-    invstds :: SharedVector{Float64} = invstd(x,means, shared=true, pids=pids)
-)
-    Xb = SharedArray(Float64, x.n, init = S -> S[localindexes(S)] = zero(Float64), pids=pids)
-    xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds, pids=pids)
-    return Xb
-end
-
-
-function xb(
-    x       :: BEDFile,
-    b       :: SharedVector{Float32},
-    indices :: BitArray{1},
-    k       :: Int,
-    mask_n  :: DenseVector{Int};
-    pids    :: DenseVector{Int}      = procs(),
-    means   :: SharedVector{Float32} = mean(Float32,x, shared=true, pids=pids),
-    invstds :: SharedVector{Float32} = invstd(x,means, shared=true, pids=pids)
-)
-    Xb = SharedArray(Float32, x.n, init = S -> S[localindexes(S)] = zero(Float32), pids=pids)
-    xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds, pids=pids)
-    return Xb
-end
-
 
 """
     xty!(Xty, x, y, [, pids=procs(), means, invstds, p=size(x,2)])
@@ -947,7 +1044,7 @@ Arguments:
 Optional Arguments:
 
 - `pids` is a vector of process IDs over which to distribute the `SharedArray`s for `means` and `invstds`, if not supplied,
-   as well as the output vector. Defaults to `procs()`. Only available for `SharedArray` arguments to `b`.
+   as well as the output vector. Defaults to `procs()`. Only available for `SharedArray` arguments to `Xty` and `y`.
 - `means` is a vector of column means for `x`.
 - `invstds` is a vector of reciprocal column standard deviations for `x`.
 - `p` is the number of predictors. Defaults to `size(x,2)`.
@@ -1056,101 +1153,11 @@ end
 
 
 
-"""
-    xty!(Xty, x, y, mask_n, [, pids=procs(), means, invstds, p=size(x,2)])
-
-Can also be called with a bitmask vector `mask_n` containins `0`s and `1`s which excludes or includes (respectively) elements of `x` and `b` from the dot product.
-"""
-function xty!(
-    Xty     :: SharedVector{Float64},
-    x       :: BEDFile,
-    y       :: SharedVector{Float64},
-    mask_n  :: DenseVector{Int};
-    pids    :: DenseVector{Int}       = procs(),
-    means   :: SharedVector{Float64} = mean(Float64,x, shared=true, pids=pids),
-    invstds :: SharedVector{Float64} = invstd(x,means, shared=true, pids=pids),
-    p       :: Int = size(x,2)
-)
-    # error checking
-    p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
-    x.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
-
-    # loop over the desired number of predictors
-#   @sync @inbounds @parallel for snp = 1:p
-    for snp = 1:p
-        Xty[snp] = dot(x,y,snp,means,invstds,mask_n)
-    end
-    return nothing
-end
-
-
-function xty!(
-    Xty     :: SharedVector{Float32},
-    x       :: BEDFile,
-    y       :: SharedVector{Float32},
-    mask_n  :: DenseVector{Int};
-    pids    :: DenseVector{Int}       = procs(),
-    means   :: SharedVector{Float32} = mean(Float32,x, shared=true, pids=pids),
-    invstds :: SharedVector{Float32} = invstd(x,means, shared=true, pids=pids),
-    p       :: Int = size(x,2)
-)
-    # error checking
-    x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
-    x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
-
-    # loop over the desired number of predictors
-#   @sync @inbounds @parallel for snp = 1:p
-    for snp = 1:p
-        Xty[snp] = dot(x,y,snp,means,invstds,mask_n)
-    end
-    return nothing
-end
-
-function xty!(
-    Xty     :: Vector{Float64},
-    x       :: BEDFile,
-    y       :: Vector{Float64},
-    mask_n  :: DenseVector{Int};
-    means   :: Vector{Float64} = mean(Float64,x, shared=false),
-    invstds :: Vector{Float64} = invstd(x,means, shared=false),
-    p       :: Int = size(x,2)
-)
-    # error checking
-    x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
-    x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
-
-    # loop over the desired number of predictors
-    @inbounds for snp = 1:p
-        Xty[snp] = dot(x,y,snp,means,invstds,mask_n)
-    end
-    return nothing
-end
-
-
-function xty!(
-    Xty     :: Vector{Float32},
-    x       :: BEDFile,
-    y       :: Vector{Float32},
-    mask_n  :: DenseVector{Int};
-    means   :: Vector{Float32} = mean(Float32,x, shared=false),
-    invstds :: Vector{Float32} = invstd(x,means, shared=false),
-    p       :: Int = size(x,2)
-)
-    # error checking
-    x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
-    x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
-
-    # loop over the desired number of predictors
-    @inbounds for snp = 1:p
-        Xty[snp] = dot(x,y,snp,means,invstds,mask_n)
-    end
-    return nothing
-end
 
 """
     xty(x, y, mask_n [, pids=procs(), means, invstds, p=size(x,2)])
 
-This function computes the operation `x'*y` for the compressed `n` x `p` design matrix from a `BEDFile` object.
+This function computes `x'*y` for the compressed `n` x `p` design matrix from a `BEDFile` object.
 It uses a bitmask `mask_n` to exclude certain rows of `x` from the calculations.
 
 Arguments:
