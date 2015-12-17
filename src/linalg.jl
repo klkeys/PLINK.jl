@@ -146,6 +146,7 @@ end
 
 """
     sumsq(y, x, means, invstds)
+
 Compute the squared L2 norm of each column of a compressed matrix `x` and save it to a vector `y`.
 
 Arguments:
@@ -683,14 +684,29 @@ function xb!(
 #   k <= sum(indices)   || throw(ArgumentError("k != sum(indices)"))
     k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
 
-    # loop over the desired number of predictors
-#   @sync @inbounds @parallel for case = 1:x.n
-#   @sync @parallel for case = 1:x.n
-    for case = 1:x.n
-        if mask_n[case] == 1
-            Xb[case] = dott(x, b, case, indices, means, invstds)
-        end
-    end
+#    # loop over the desired number of predictors
+#    for case = 1:x.n
+#        if mask_n[case] == 1
+#            Xb[case] = dott(x, b, case, indices, means, invstds)
+#        end
+#    end
+    np = length(pids)    
+    i = 1
+    nextidx() = (idx=i; i+=1; idx)
+    @sync begin
+        for pid in pids
+            if pid != myid() || np == 1
+                @async begin
+                    while true
+                        case = nextidx()
+                        case > x.n && break
+                        mask_n[case] == 0 && continue
+                        @inbounds Xb[case] = remotecall_fetch(pid, dott, x, b, case, indices, means, invstds)
+                    end # end while
+                end # end @async
+            end # end if/else for pid
+        end # end loop over pids
+    end # end @sync
     return nothing
 end
 
@@ -711,13 +727,28 @@ function xb!(
     k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
 
     # loop over the desired number of predictors
-#   @sync @inbounds @parallel for case = 1:x.n
-    for case = 1:x.n
-        if mask_n[case] == 1
-            Xb[case] = dott(x, b, case, indices, means, invstds)
-        end
-    end
-
+#    for case = 1:x.n
+#        if mask_n[case] == 1
+#            Xb[case] = dott(x, b, case, indices, means, invstds)
+#        end
+#    end
+    np = length(pids)    
+    i = 1
+    nextidx() = (idx=i; i+=1; idx)
+    @sync begin
+        for pid in pids
+            if pid != myid() || np == 1
+                @async begin
+                    while true
+                        case = nextidx()
+                        case > x.n && break
+                        mask_n[case] == 0 && continue
+                        @inbounds Xb[case] = remotecall_fetch(pid, dott, x, b, case, indices, means, invstds)
+                    end # end while
+                end # end @async
+            end # end if/else for pid
+        end # end loop over pids
+    end # end @sync
     return nothing
 end
 
@@ -756,13 +787,24 @@ function xb!(
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
 #   k <= sum(indices)   || throw(ArgumentError("k != sum(indices)"))
     k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
+    pids == procs(Xb) == procs(b) == procs(x.xt) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xb! must be seen by same processes")) 
 
-    # loop over the desired number of predictors
-#   @sync @inbounds @parallel for case = 1:x.n
-    for case = 1:x.n
-        Xb[case] = dott(x, b, case, indices, means, invstds)
-    end
-
+    np = length(pids)    
+    i = 1
+    nextidx() = (idx=i; i+=1; idx)
+    @sync begin
+        for pid in pids
+            if pid != myid() || np == 1
+                @async begin
+                    while true
+                        case = nextidx()
+                        case > x.n && break
+                        @inbounds Xb[case] = remotecall_fetch(pid, dott, x, b, case, indices, means, invstds)
+                    end # end while
+                end # end @async
+            end # end if/else for pid
+        end # end loop over pids
+    end # end @sync
     return nothing
 end
 
@@ -780,13 +822,24 @@ function xb!(
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
 #   k <= sum(indices)   || throw(ArgumentError("k != sum(indices)"))
     k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
+    pids == procs(Xb) == procs(b) == procs(x.xt) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xb! must be seen by same processes")) 
 
-    # loop over the desired number of predictors
-#   @sync @inbounds @parallel for case = 1:x.n
-    for case = 1:x.n
-        Xb[case] = dott(x, b, case, indices, means, invstds)
-    end
-
+    np = length(pids)    
+    i = 1
+    nextidx() = (idx=i; i+=1; idx)
+    @sync begin
+        for pid in pids
+            if pid != myid() || np == 1
+                @async begin
+                    while true
+                        case = nextidx()
+                        case > x.n && break
+                        @inbounds Xb[case] = remotecall_fetch(pid, dott, x, b, case, indices, means, invstds)
+                    end # end while
+                end # end @async
+            end # end if/else for pid
+        end # end loop over pids
+    end # end @sync
     return nothing
 end
 
@@ -948,7 +1001,7 @@ function xty!(
     x       :: BEDFile,
     y       :: SharedVector{Float64},
     mask_n  :: DenseVector{Int};
-    pids    :: DenseVector{Int}       = procs(),
+    pids    :: DenseVector{Int}      = procs(),
     means   :: SharedVector{Float64} = mean(Float64,x, shared=true, pids=pids),
     invstds :: SharedVector{Float64} = invstd(x,means, shared=true, pids=pids),
     p       :: Int = size(x,2)
@@ -956,12 +1009,24 @@ function xty!(
     # error checking
     p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
     x.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
+    pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes")) 
 
-    # loop over the desired number of predictors
-#   @sync @inbounds @parallel for snp = 1:p
-    for snp = 1:p
-        Xty[snp] = dot(x,y,snp,means,invstds,mask_n)
-    end
+    np = length(pids)    
+    i = 1
+    nextidx() = (idx=i; i+=1; idx)
+    @sync begin
+        for pid in pids
+            if pid != myid() || np == 1
+                @async begin
+                    while true
+                        snp = nextidx()
+                        snp > p && break
+                        @inbounds Xty[snp] = remotecall_fetch(pid,dot,x,y,snp,means,invstds,mask_n)
+                    end # end while
+                end # end @async
+            end # end if/else for pid
+        end # end loop over pids
+    end # end @sync
     return nothing
 end
 
@@ -971,7 +1036,7 @@ function xty!(
     x       :: BEDFile,
     y       :: SharedVector{Float32},
     mask_n  :: DenseVector{Int};
-    pids    :: DenseVector{Int}       = procs(),
+    pids    :: DenseVector{Int}      = procs(),
     means   :: SharedVector{Float32} = mean(Float32,x, shared=true, pids=pids),
     invstds :: SharedVector{Float32} = invstd(x,means, shared=true, pids=pids),
     p       :: Int = size(x,2)
@@ -979,12 +1044,25 @@ function xty!(
     # error checking
     x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
     x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
+    pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes")) 
 
     # loop over the desired number of predictors
-#   @sync @inbounds @parallel for snp = 1:p
-    for snp = 1:p
-        Xty[snp] = dot(x,y,snp,means,invstds,mask_n)
-    end
+    np = length(pids)    
+    i = 1
+    nextidx() = (idx=i; i+=1; idx)
+    @sync begin
+        for pid in pids
+            if pid != myid() || np == 1
+                @async begin
+                    while true
+                        snp = nextidx()
+                        snp > p && break
+                        @inbounds Xty[snp] = remotecall_fetch(pid,dot,x,y,snp,means,invstds,mask_n)
+                    end # end while
+                end # end @async
+            end # end if/else for pid
+        end # end loop over pids
+    end # end @sync
     return nothing
 end
 
@@ -995,7 +1073,7 @@ function xty!(
     mask_n  :: DenseVector{Int};
     means   :: Vector{Float64} = mean(Float64,x, shared=false),
     invstds :: Vector{Float64} = invstd(x,means, shared=false),
-    p       :: Int = size(x,2)
+    p       :: Int             = size(x,2),
 )
     # error checking
     x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
@@ -1016,7 +1094,7 @@ function xty!(
     mask_n  :: DenseVector{Int};
     means   :: Vector{Float32} = mean(Float32,x, shared=false),
     invstds :: Vector{Float32} = invstd(x,means, shared=false),
-    p       :: Int = size(x,2)
+    p       :: Int             = size(x,2),
 )
     # error checking
     x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
@@ -1034,6 +1112,7 @@ end
 
 This function computes the operation `x'*y` for the compressed `n` x `p` design matrix from a `BEDFile` object.
 `xty!()` enforces a uniform type (`SharedArray` v. `Array` and `Float64` v. `Float32`) across all arrays.
+It also requires `SharedArray` arguments to be seen by the same processes, i.e. `procs(Xty) == procs(y) == procs(x.x)`. 
 
 Arguments:
 
@@ -1056,36 +1135,29 @@ function xty!(
     pids    :: DenseVector{Int}      = procs(),
     means   :: SharedVector{Float64} = mean(Float64,x, shared=true, pids=pids),
     invstds :: SharedVector{Float64} = invstd(x,means, shared=true, pids=pids),
-    p       :: Int = size(x,2)
+    p       :: Int                   = size(x,2)
 )
     # error checking
-    p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
+    p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $p elements!"))
     x.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
+    pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes")) 
 
-    # loop over the desired number of predictors
-#   @sync @inbounds @parallel for snp = 1:p
-    for snp = 1:p
-        Xty[snp] = dot(x,y,snp,means,invstds)
-    end
-
-#    np = length(pids)  # determine the number of processes available
-#    i = 1
-#    nextidx() = (idx=i; i+=1; idx)
-#    @sync begin
-#        for pid=1:np
-#            if pid != myid() || np == 1
-#                @async begin
-#                    while true
-#                        snp = nextidx()
-#                        if snp > p
-#                            break
-#                        end
-#                        Xty[snp] = remotecall_fetch(pid,dot,x,y,snp,means,invstds)
-#                    end
-#                end
-#            end
-#        end
-#    end
+    np = length(pids)    
+    i = 1
+    nextidx() = (idx=i; i+=1; idx)
+    @sync begin
+        for pid in pids
+            if pid != myid() || np == 1
+                @async begin
+                    while true
+                        snp = nextidx()
+                        snp > p && break
+                        @inbounds Xty[snp] = remotecall_fetch(pid,dot,x,y,snp,means,invstds)
+                    end # end while
+                end # end @async
+            end # end if/else for pid
+        end # end loop over pids
+    end # end @sync
     return nothing
 end
 
@@ -1094,20 +1166,31 @@ function xty!(
     Xty     :: SharedVector{Float32},
     x       :: BEDFile,
     y       :: SharedVector{Float32};
-    pids    :: DenseVector{Int}       = procs(),
+    pids    :: DenseVector{Int}      = procs(),
     means   :: SharedVector{Float32} = mean(Float32,x, shared=true, pids=pids),
     invstds :: SharedVector{Float32} = invstd(x,means, shared=true, pids=pids),
-    p       :: Int = size(x,2)
+    p       :: Int                   = size(x,2)
 )
     # error checking
     x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
     x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
 
-    # loop over the desired number of predictors
-#   @sync @inbounds @parallel for snp = 1:p
-    for snp = 1:p
-        Xty[snp] = dot(x,y,snp,means,invstds)
-    end
+    np = length(pids)    
+    i = 1
+    nextidx() = (idx=i; i+=1; idx)
+    @sync begin
+        for pid in pids
+            if pid != myid() || np == 1
+                @async begin
+                    while true
+                        snp = nextidx()
+                        snp > p && break
+                        @inbounds Xty[snp] = remotecall_fetch(pid,dot,x,y,snp,means,invstds)
+                    end # end while
+                end # end @async
+            end # end if/else for pid
+        end # end loop over pids
+    end # end @sync
     return nothing
 end
 
@@ -1122,6 +1205,7 @@ function xty!(
     # error checking
     x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
     x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
+    pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes")) 
 
     # loop over the desired number of predictors
     @inbounds for snp = 1:p
