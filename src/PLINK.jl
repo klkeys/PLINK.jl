@@ -30,6 +30,7 @@ export invstd
 export maf
 export getindex
 export addx2!
+export compress
 
 # constants used for decompression purposes
 const ZERO8  = convert(Int8,0)
@@ -73,8 +74,12 @@ For a precise desceiption of PLINK BED files, see the file type reference in the
 """
 const geno32 = [0.0f0, NaN32, 1.0f0, 2.0f0]
 const geno64 = [0.0, NaN, 1.0, 2.0]
+const bin32  = Dict{Float32, Int8}(0.0f0 => ZERO8, NaN32 => ONE8, 1.0f0 => TWO8, 2.0f0 => THREE8)
+const bin64  = Dict{Float64, Int8}(0.0 => ZERO8, NaN => ONE8, 1.0 => TWO8, 2.0 => THREE8)
+const binint = Dict{Integer, Int8}(0 => ZERO8, NaN => ONE8, 1.0 => TWO8, 2.0 => THREE8)
 
 include("bedfile.jl")
+include("compression.jl")
 include("decompression.jl")
 include("gpu64.jl")
 include("gpu32.jl")

@@ -377,9 +377,9 @@ end
 
 "Compute the precision of one `snp` column of a `BEDFile` object `x` with column `means` of type `T` (either Float32 or Float64, defaulting to the latter)."
 function invstd_col(T::Type, x::BEDFile, snp::Int, means::DenseVector)
-    s = zero(T)         # accumulation variable, will eventually equal mean(x,col) for current col
-    t = zero(T)         # temp variable, output of interpret_genotype
-    u = zero(T)         # count the number of people
+    s = zero(T)     # accumulation variable, will eventually equal mean(x,col) for current col
+    t = zero(T)     # temp variable, output of interpret_genotype
+    u = zero(T)     # count the number of people
     m = means[snp]  # mean of current column
 
     # loop over all n individuals
@@ -388,14 +388,14 @@ function invstd_col(T::Type, x::BEDFile, snp::Int, means::DenseVector)
 
         # ensure that we do not count NaNs
         if isfinite(t)
-            s        += (t - m)^2
-            u        += one(T)
+            s += (t - m)^2
+            u += one(T)
         end
     end
 
     # now compute the std = sqrt(s) / (u - 1))
     # save inv std in y
-    s    = ifelse(s <= zero(T), zero(T), sqrt((u - one(T)) / s))
+    s = ifelse(s <= zero(T), zero(T), sqrt((u - one(T)) / s))
     return s
 end
 
@@ -422,7 +422,7 @@ function dot(
     means   :: DenseVector{Float64},
     invstds :: DenseVector{Float64}
 )
-    s = zero(Float64)               # accumulation variable, will eventually equal dot(y,z)
+    s = zero(Float64)   # accumulation variable, will eventually equal dot(y,z)
     m = means[snp]      # mean of SNP predictor
     d = invstds[snp]    # 1/std of SNP predictor
 
@@ -456,7 +456,7 @@ function dot(
     means   :: DenseVector{Float32},
     invstds :: DenseVector{Float32}
 )
-    s = zero(Float32)           # accumulation variable, will eventually equal dot(y,z)
+    s = zero(Float32)   # accumulation variable, will eventually equal dot(y,z)
     m = means[snp]      # mean of SNP predictor
     d = invstds[snp]    # 1/std of SNP predictor
 
@@ -492,7 +492,7 @@ function dot(
     invstds :: DenseVector{Float64},
     mask_n  :: DenseVector{Int}
 )
-    s = zero(Float64)               # accumulation variable, will eventually equal dot(y,z)
+    s = zero(Float64)   # accumulation variable, will eventually equal dot(y,z)
     m = means[snp]      # mean of SNP predictor
     d = invstds[snp]    # 1/std of SNP predictor
 
@@ -538,7 +538,7 @@ function dot(
     invstds :: DenseVector{Float32},
     mask_n  :: DenseVector{Int}
 )
-    s = zero(Float32)           # accumulation variable, will eventually equal dot(y,z)
+    s = zero(Float32)   # accumulation variable, will eventually equal dot(y,z)
     m = means[snp]      # mean of SNP predictor
     d = invstds[snp]    # 1/std of SNP predictor
 
@@ -594,8 +594,8 @@ function dott(
     means   :: DenseVector{Float64},
     invstds :: DenseVector{Float64}
 )
-    s = zero(Float64)       # accumulation variable, will eventually equal dot(y,z)
-    t = zero(Float64)       # store interpreted genotype
+    s = zero(Float64)  # accumulation variable, will eventually equal dot(y,z)
+    t = zero(Float64)  # store interpreted genotype
    @inbounds for snp = 1:x.p
 #    for snp = 1:x.p
 
@@ -632,8 +632,8 @@ function dott(
     means   :: DenseVector{Float32},
     invstds :: DenseVector{Float32}
 )
-    s = zero(Float32)       # accumulation variable, will eventually equal dot(y,z)
-    t = zero(Float32)       # store interpreted genotype
+    s = zero(Float32)  # accumulation variable, will eventually equal dot(y,z)
+    t = zero(Float32)  # store interpreted genotype
 #   @inbounds for snp = 1:x.p
     for snp = 1:x.p
 
@@ -681,7 +681,6 @@ function xb!(
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
-#   k <= sum(indices)   || throw(ArgumentError("k != sum(indices)"))
     k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
 
 #    # loop over the desired number of predictors
@@ -690,7 +689,7 @@ function xb!(
 #            Xb[case] = dott(x, b, case, indices, means, invstds)
 #        end
 #    end
-    np = length(pids)    
+    np = length(pids)
     i = 1
     nextidx() = (idx=i; i+=1; idx)
     @sync begin
@@ -723,7 +722,6 @@ function xb!(
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
-#   k <= sum(indices)   || throw(ArgumentError("k != sum(indices)"))
     k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
 
     # loop over the desired number of predictors
@@ -732,7 +730,7 @@ function xb!(
 #            Xb[case] = dott(x, b, case, indices, means, invstds)
 #        end
 #    end
-    np = length(pids)    
+    np = length(pids)
     i = 1
     nextidx() = (idx=i; i+=1; idx)
     @sync begin
@@ -785,11 +783,10 @@ function xb!(
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
-#   k <= sum(indices)   || throw(ArgumentError("k != sum(indices)"))
     k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
-    pids == procs(Xb) == procs(b) == procs(x.xt) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xb! must be seen by same processes")) 
+    pids == procs(Xb) == procs(b) == procs(x.xt) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xb! must be seen by same processes"))
 
-    np = length(pids)    
+    np = length(pids)
     i = 1
     nextidx() = (idx=i; i+=1; idx)
     @sync begin
@@ -820,11 +817,10 @@ function xb!(
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
-#   k <= sum(indices)   || throw(ArgumentError("k != sum(indices)"))
     k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
-    pids == procs(Xb) == procs(b) == procs(x.xt) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xb! must be seen by same processes")) 
+    pids == procs(Xb) == procs(b) == procs(x.xt) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xb! must be seen by same processes"))
 
-    np = length(pids)    
+    np = length(pids)
     i = 1
     nextidx() = (idx=i; i+=1; idx)
     @sync begin
@@ -1009,9 +1005,9 @@ function xty!(
     # error checking
     p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
     x.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
-    pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes")) 
+    pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes"))
 
-    np = length(pids)    
+    np = length(pids)
     i = 1
     nextidx() = (idx=i; i+=1; idx)
     @sync begin
@@ -1044,10 +1040,10 @@ function xty!(
     # error checking
     x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
     x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
-    pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes")) 
+    pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes"))
 
     # loop over the desired number of predictors
-    np = length(pids)    
+    np = length(pids)
     i = 1
     nextidx() = (idx=i; i+=1; idx)
     @sync begin
@@ -1112,7 +1108,7 @@ end
 
 This function computes the operation `x'*y` for the compressed `n` x `p` design matrix from a `BEDFile` object.
 `xty!()` enforces a uniform type (`SharedArray` v. `Array` and `Float64` v. `Float32`) across all arrays.
-It also requires `SharedArray` arguments to be seen by the same processes, i.e. `procs(Xty) == procs(y) == procs(x.x)`. 
+It also requires `SharedArray` arguments to be seen by the same processes, i.e. `procs(Xty) == procs(y) == procs(x.x)`.
 
 Arguments:
 
@@ -1140,9 +1136,9 @@ function xty!(
     # error checking
     p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $p elements!"))
     x.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
-    pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes")) 
+    pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes"))
 
-    np = length(pids)    
+    np = length(pids)
     i = 1
     nextidx() = (idx=i; i+=1; idx)
     @sync begin
@@ -1175,7 +1171,7 @@ function xty!(
     x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
     x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
 
-    np = length(pids)    
+    np = length(pids)
     i = 1
     nextidx() = (idx=i; i+=1; idx)
     @sync begin
@@ -1205,7 +1201,7 @@ function xty!(
     # error checking
     x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
     x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
-    pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes")) 
+    pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes"))
 
     # loop over the desired number of predictors
     @inbounds for snp = 1:p
