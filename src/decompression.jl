@@ -93,17 +93,16 @@ end
 """
     decompress_genotypes!(Y, x, means, invstds [, standardize=true])
 
-
 Can also be called with a matrix `Y`, in which case all genotypes are decompressed.
 Use this function judiciously, since the memory demands from decompressing large portions of `x` can grow quite large.
 Use optional argument `standardize` to control standardization of allele dosages.
 """
-function decompress_genotypes!(
-    Y           :: DenseMatrix{Float64},
+function decompress_genotypes!{T <: Float}(
+    Y           :: DenseMatrix{T},
     x           :: BEDFile;
-    pids        :: DenseVector{Int}     = procs(),
-    means       :: DenseVector{Float64} = mean(Float64,x, shared=true, pids=pids),
-    invstds     :: DenseVector{Float64} = invstd(x,means, shared=true, pids=pids),
+    pids        :: DenseVector{Int} = procs(),
+    means       :: DenseVector{T}   = mean(T,x, shared=true, pids=pids),
+    invstds     :: DenseVector{T}   = invstd(x,means, shared=true, pids=pids),
     standardize :: Bool = true,
 )
 
@@ -123,51 +122,19 @@ function decompress_genotypes!(
             s = invstds[j]
         end
         @inbounds for i = 1:n
-            Y[i,j] = getindex(x,x.x,i,j,x.blocksize,interpret=true,float32=false)
+            if T == Float64
+                Y[i,j] = getindex(x,x.x,i,j,x.blocksize,interpret=true,float32=false)
+            else
+                Y[i,j] = getindex(x,x.x,i,j,x.blocksize,interpret=true,float32=true)
+            end
             if standardize
                 Y[i,j] = (Y[i,j] - m) * s
             end
         end
     end
-
     return nothing
 end
 
-
-function decompress_genotypes!(
-    Y           :: DenseMatrix{Float32},
-    x           :: BEDFile;
-    pids        :: DenseVector{Int}     = procs(),
-    means       :: DenseVector{Float32} = mean(Float32,x, shared=true, pids=pids),
-    invstds     :: DenseVector{Float32} = invstd(x,means, shared=true, pids=pids),
-    standardize :: Bool = true
-)
-
-    # get dimensions of matrix to fill
-    (n,p) = size(Y)
-    xn = size(x,1)
-    xp = size(x,2)
-
-    # ensure dimension compatibility
-    n == xn || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
-    p <= xp || throw(DimensionMismatch("Y has more columns than x"))
-
-    ## TODO: parallelize this for SharedArrays
-    @inbounds for j = 1:xp
-        if standardize
-            m = means[j]
-            s = invstds[j]
-        end
-        @inbounds for i = 1:n
-            Y[i,j] = getindex(x,x.x,i,j,x.blocksize,interpret=true,float32=true)
-            if standardize
-                Y[i,j] = (Y[i,j] - m) * s
-            end
-        end
-    end
-
-    return nothing
-end
 
 
 """
@@ -175,13 +142,13 @@ end
 
 When `Y` is a matrix and `indices` is a `BitArray` or `Int` array that indexes the columns of `x`, then `decompress_genotypes!()` decompresses only a subset of `x`.
 """
-function decompress_genotypes!(
-    Y       :: DenseMatrix{Float64},
+function decompress_genotypes!{T <: Float}(
+    Y       :: DenseMatrix{T},
     x       :: BEDFile,
     indices :: BitArray{1};
-    pids    :: DenseVector{Int}     = procs(),
-    means   :: DenseVector{Float64} = mean(Float64,x, shared=true, pids=pids),
-    invstds :: DenseVector{Float64} = invstd(x,means, shared=true, pids=pids)
+    pids    :: DenseVector{Int} = procs(),
+    means   :: DenseVector{T}   = mean(T,x, shared=true, pids=pids),
+    invstds :: DenseVector{T}   = invstd(x,means, shared=true, pids=pids)
 )
 
     # get dimensions of matrix to fill
@@ -214,8 +181,12 @@ function decompress_genotypes!(
 
             if snp <= x.p
                 @inbounds for case = 1:n
-                    t = getindex(x,x.x,case,snp,x.blocksize)
-                    Y[case,current_col] = ifelse(isnan(t), 0.0, (t - m)*d)
+                    if T == Float64
+                        t = getindex(x,x.x,case,snp,x.blocksize)
+                    else
+                        t = getindex(x,x.x,case,snp,x.blocksize, float32=true)
+                    end
+                    Y[case,current_col] = ifelse(isnan(t), zero(T), (t - m)*d)
                     quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
                 end
             else
@@ -233,123 +204,14 @@ function decompress_genotypes!(
 end
 
 
-function decompress_genotypes!(
-    Y       :: DenseMatrix{Float32},
-    x       :: BEDFile,
-    indices :: BitArray{1};
-    pids    :: DenseVector{Int}     = procs(),
-    means   :: DenseVector{Float32} = mean(Float32,x, shared=true, pids=pids),
-    invstds :: DenseVector{Float32} = invstd(x,means, shared=true, pids=pids)
-)
 
-    # get dimensions of matrix to fill
-    (n,p) = size(Y)
-    xn = x.n
-    xp = size(x,2)
-
-    # ensure dimension compatibility
-    n == xn            || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
-    p <= xp            || throw(DimensionMismatch("Y has more columns than x"))
-    sum(indices) <= xp || throw(DimensionMismatch("Vector 'indices' indexes more columns than are available in Y"))
-
-    # counter to ensure that we do not attempt to overfill Y
-    current_col = 0
-
-    quiet = true
-    ## TODO: parallelize this for SharedArrays
-    @inbounds for snp = 1:xp
-
-        # use this column?
-        if indices[snp]
-
-            # add to counter
-            current_col += 1
-            quiet || println("filling current column $current_col with snp $snp")
-
-            # extract column mean, inv std
-            m = means[snp]
-            d = invstds[snp]
-
-            if snp <= x.p
-                @inbounds for case = 1:n
-                    t = getindex(x,x.x,case,snp,x.blocksize, float32=true)
-                    Y[case,current_col] = ifelse(isnan(t), 0.0f0, (t - m)*d)
-                    quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
-                end
-            else
-                @inbounds for case = 1:n
-                    Y[case,current_col] = (x.x2[case,(snp-x.p)] - m) * d
-                    quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
-                end
-            end
-
-            # quit when Y is filled
-            current_col == p && return nothing
-        end
-    end
-    return nothing
-end
-
-
-function decompress_genotypes!(
-    Y       :: DenseMatrix{Float64},
+function decompress_genotypes!{T <: Float}(
+    Y       :: DenseMatrix{T},
     x       :: BEDFile,
     indices :: DenseVector{Int};
     pids    :: DenseVector{Int}     = procs(),
-    means   :: DenseVector{Float64} = mean(Float64,x, shared=true, pids=pids),
-    invstds :: DenseVector{Float64} = invstd(x,means, shared=true, pids=pids)
-)
-
-    # get dimensions of matrix to fill
-    (n,p) = size(Y)
-    xn = x.n
-    xp = size(x,2)
-
-    # ensure dimension compatibility
-    n == xn          || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
-    p <= xp          || throw(DimensionMismatch("Y has more columns than x"))
-    length(indices) <= p || throw(DimensionMismatch("Vector 'indices' indexes more columns than are available in Y"))
-
-    # counter to ensure that we do not attempt to overfill Y
-    current_col = 0
-
-    quiet = true
-    @inbounds for snp in indices
-
-        # add to counter
-        current_col += 1
-        quiet || println("filling current column $current_col with snp $snp")
-
-        # extract column mean, inv std
-        m = means[snp]
-        d = invstds[snp]
-        if snp <= x.p
-            @inbounds for case = 1:n
-                t = getindex(x,x.x,case,snp,x.blocksize)
-                Y[case,current_col] = ifelse(isnan(t), 0.0, (t - m)*d)
-                quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
-            end
-        else
-            @inbounds for case = 1:n
-                Y[case,current_col] = (x.x2[case,(snp-x.p)] - m) * d
-            end
-        end
-
-        # quit when Y is filled
-        current_col == p && return nothing
-    end
-
-    return nothing
-end
-
-
-function decompress_genotypes!(
-    Y       :: DenseMatrix{Float32},
-    x       :: BEDFile,
-    indices :: DenseVector{Int};
-    pids    :: DenseVector{Int}     = procs(),
-    means   :: DenseVector{Float32} = mean(Float32,x, shared=true, pids=pids),
-    invstds :: DenseVector{Float32} = invstd(x,means, shared=true, pids=pids)
+    means   :: DenseVector{T} = mean(T,x, shared=true, pids=pids),
+    invstds :: DenseVector{T} = invstd(x,means, shared=true, pids=pids)
 )
 
     # get dimensions of matrix to fill
@@ -377,8 +239,12 @@ function decompress_genotypes!(
         d = invstds[snp]
         if snp <= x.p
             @inbounds for case = 1:n
-                t = getindex(x,x.x,case,snp,x.blocksize)
-                Y[case,current_col] = ifelse(isnan(t), 0.0f0, (t - m)*d)
+                if T == Float64
+                    t = getindex(x,x.x,case,snp,x.blocksize)
+                else
+                    t = getindex(x,x.x,case,snp,x.blocksize, float32=true)
+                end
+                Y[case,current_col] = ifelse(isnan(t), zero(T), (t - m)*d)
                 quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
             end
         else
@@ -395,20 +261,19 @@ function decompress_genotypes!(
 end
 
 
-
 """
     decompress_genotypes!(Y, x, indices, mask_n [,pids=procs(), means=mean(Float64,x,shared=true,pids=pids), invstds=(x,means,shared=true,pids=pids)])
 
 If called with a vector `mask_n` of `0`s and `1`s, then `decompress_genotypes!()` will decompress the columns of `x` indexed by `indices` into `Y` while masking the rows indexed by `mask_n`.
 """
-function decompress_genotypes!(
-    Y       :: DenseMatrix{Float64},
+function decompress_genotypes!{T <: Float}(
+    Y       :: DenseMatrix{T},
     x       :: BEDFile,
     indices :: BitArray{1},
     mask_n  :: DenseVector{Int};
-    pids    :: DenseVector{Int}     = procs(),
-    means   :: DenseVector{Float64} = mean(Float64,x, shared=true, pids=pids),
-    invstds :: DenseVector{Float64} = invstd(x,means, shared=true, pids=pids)
+    pids    :: DenseVector{Int} = procs(),
+    means   :: DenseVector{T}   = mean(T,x, shared=true, pids=pids),
+    invstds :: DenseVector{T}   = invstd(x,means, shared=true, pids=pids)
 )
 
     # get dimensions of matrix to fill
@@ -442,11 +307,15 @@ function decompress_genotypes!(
             if snp <= x.p
                 @inbounds for case = 1:n
                     if mask_n[case] == 1
-                        t = getindex(x,x.x,case,snp,x.blocksize)
-                        Y[case,current_col] = ifelse(isnan(t), 0.0, (t - m)*d)
+                        if T == Float64
+                            t = getindex(x,x.x,case,snp,x.blocksize)
+                        else
+                            t = getindex(x,x.x,case,snp,x.blocksize, float32=true)
+                        end
+                        Y[case,current_col] = ifelse(isnan(t), zero(T), (t - m)*d)
                         quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
                     else
-                        Y[case,current_col] = 0.0
+                        Y[case,current_col] = zero(T) 
                     end
                 end
             else
@@ -455,74 +324,7 @@ function decompress_genotypes!(
                         Y[case,current_col] = (x.x2[case,(snp-x.p)] - m) * d
                         quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
                     else
-                        Y[case,current_col] = 0.0
-                    end
-                end
-            end
-
-            # quit when Y is filled
-            current_col == p && return nothing
-        end
-    end
-    return nothing
-end
-
-
-function decompress_genotypes!(
-    Y       :: DenseMatrix{Float32},
-    x       :: BEDFile,
-    indices :: BitArray{1},
-    mask_n  :: DenseVector{Int};
-    pids    :: DenseVector{Int}     = procs(),
-    means   :: DenseVector{Float32} = mean(Float32,x, shared=true, pids=pids),
-    invstds :: DenseVector{Float32} = invstd(x,means, shared=true, pids=pids)
-)
-
-    # get dimensions of matrix to fill
-    (n,p) = size(Y)
-    xn = x.n
-    xp = size(x,2)
-
-    # ensure dimension compatibility
-    n <= xn             || throw(DimensionMismatch("column dimension of of Y exceeds column dimension of uncompressed x"))
-    n == length(mask_n) || throw(DimensionMismatch("bitmask mask_n indexes different number of columns than column dimension of Y"))
-    p <= xp             || throw(DimensionMismatch("Y has more columns than x"))
-    sum(indices) <= xp  || throw(DimensionMismatch("Vector 'indices' indexes more columns than are available in Y"))
-
-    # counter to ensure that we do not attempt to overfill Y
-    current_col = 0
-
-    quiet = true
-    @inbounds for snp = 1:xp
-
-        # use this column?
-        if indices[snp]
-
-            # add to counter
-            current_col += 1
-            quiet || println("filling current column $current_col with snp $snp")
-
-            # extract column mean, inv std
-            m = means[snp]
-            d = invstds[snp]
-
-            if snp <= x.p
-                @inbounds for case = 1:n
-                    if mask_n[case] == 1
-                        t = getindex(x,x.x,case,snp,x.blocksize, float32=true)
-                        Y[case,current_col] = ifelse(isnan(t), 0.0f0, (t - m)*d)
-                        quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
-                    else
-                        Y[case,current_col] = 0.0f0
-                    end
-                end
-            else
-                @inbounds for case = 1:n
-                    if mask_n[case] == 1
-                        Y[case,current_col] = (x.x2[case,(snp-x.p)] - m) * d
-                        quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
-                    else
-                        Y[case,current_col] = 0.0f0
+                        Y[case,current_col] = zero(T) 
                     end
                 end
             end
@@ -550,44 +352,24 @@ Arguments:
 - `means` is an array of column means for `x`.
 - `invstds` is an array of column precisions for `x`.
 """
-function decompress_genotypes!(
-    y       :: DenseVector{Float64},
+function decompress_genotypes!{T <: Float}(
+    y       :: DenseVector{T},
     x       :: BEDFile,
     snp     :: Int,
-    means   :: DenseVector{Float64},
-    invstds :: DenseVector{Float64}
+    means   :: DenseVector{T},
+    invstds :: DenseVector{T}
 )
     m = means[snp]
     d = invstds[snp]
-    t = zero(Float64)
+    t = zero(T)
     if snp <= x.p
         @inbounds for case = 1:x.n
-            t       = getindex(x,x.x,case,snp,x.blocksize)
-            y[case] = ifelse(isnan(t), 0.0, (t - m)*d)
-        end
-    else
-        @inbounds for case = 1:x.n
-            y[case] = (x.x2[case,(snp-x.p)] - m) * d
-        end
-    end
-    return nothing
-end
-
-
-function decompress_genotypes!(
-    y       :: DenseVector{Float32},
-    x       :: BEDFile,
-    snp     :: Int,
-    means   :: DenseVector{Float32},
-    invstds :: DenseVector{Float32}
-)
-    m = means[snp]
-    d = invstds[snp]
-    t = zero(Float32)
-    if snp <= x.p
-        @inbounds for case = 1:x.n
-            t       = getindex(x,x.x,case,snp,x.blocksize, float32=true)
-            y[case] = ifelse(isnan(t), 0.0f0, (t - m)*d)
+            if T == Float64
+                t = getindex(x,x.x,case,snp,x.blocksize)
+            else
+                t = getindex(x,x.x,case,snp,x.blocksize, float32=true)
+            end
+            y[case] = ifelse(isnan(t), zero(T), (t - m)*d)
         end
     else
         @inbounds for case = 1:x.n

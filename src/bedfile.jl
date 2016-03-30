@@ -1,5 +1,4 @@
 """
-
     BEDFile(x,xt,n,p,blocksize,tblocksize,x2,p2,x2t)
 
 The `BEDFile` type encodes the compressed genotypes information housed in PLINK BED files.
@@ -36,7 +35,6 @@ end
 
 
 """
-
     BEDFile(T::Type, filename, tfilename, n, p, blocksize, tblocksize, x2filename [, pids=procs()])
 
 Construct a `BEDFile` from filepaths `filename`, `tfilename`, and `x2filename` when `n`, `p`, `blocksize`, and `tblocksize` are known and specified.
@@ -71,7 +69,6 @@ BEDFile(filename::ASCIIString, tfilename::ASCIIString, n::Int, p::Int, blocksize
 
 
 """
-
     BEDFile(T::Type, filename, tfilename, n, p, x2filename [, pids=procs()])
 
 Construct a `BEDFile` from filepaths `filename`, `tfilename`, and `x2filename` when `n` and `p` are known and specified.
@@ -103,7 +100,6 @@ end
 BEDFile(filename::ASCIIString, tfilename::ASCIIString, n::Int, p::Int, x2filename::ASCIIString; pids::DenseVector{Int} = procs()) = BEDFile(Float64, filename, tfilename, n, p, xtfilename, pids=pids)
 
 """
-
     BEDFile(T::Type, filename, tfilename [, pids=procs()])
 
 Construct a `BEDFile` from filepaths `filename`, `tfilename`, and `x2filename`.
@@ -141,7 +137,6 @@ BEDFile(filename::ASCIIString, tfilename::ASCIIString; pids::DenseVector{Int} = 
 
 
 """
-
     BEDFile(T::Type, filename, tfilename, x2filename [, pids=procs()])
 
 Construct a `BEDFile` from filepaths `filename`, `tfilename`, and `x2filename`.
@@ -217,34 +212,30 @@ copy(x::BEDFile) = BEDFile(x.x, x.xt, x.n, x.p, x.blocksize, x.tblocksize, x.x2,
 isequal(x::BEDFile, y::BEDFile) = x == y
 
 """
-
-    addx2!(x::BEDFile, x2 [,pids=procs()])
+    addx2!(T::Float, x::BEDFile, x2::Matrix [,pids=procs()])
 
 Add a matrix of nongenetic covariates `x2` to a BEDFile `x`.
 The optional argument `pids` controls the process IDs to which we distribute `x2`.
+If no argument is given for `T` then `addx2!` defaults to `Float64`.
 """
-function addx2!(x::BEDFile, x2::DenseMatrix{Float64}; pids::DenseVector{Int} = procs())
+function addx2!(
+    T    :: Type,
+    x    :: BEDFile, 
+    x2   :: DenseMatrix{T}; 
+    pids :: DenseVector{Int} = procs()
+)
     (n,p2) = size(x2)
     n == x.n || throw(DimensionMismatch("x2 has $n rows but should have $(x.n) of them"))
     x.p2 = p2
-    x.x2 = SharedArray(Float64, n, p2, init = S -> localindexes(S) = zero(Float64), pids=pids)
+    x.x2 = SharedArray(T, n, p2, init = S -> localindexes(S) = zero(T), pids=pids)
     copy!(x.x2,x2)
-    x.x2t = SharedArray(Float64, p2, n, init = S -> localindexes(S) = zero(Float64), pids=pids)
+    x.x2t = SharedArray(T, p2, n, init = S -> localindexes(S) = zero(T), pids=pids)
     copy!(x.x2t, x2')
     return nothing
 end
 
-
-function addx2!(x::BEDFile, x2::DenseMatrix{Float32}; pids::DenseVector{Int} = procs())
-    (n,p2) = size(x2)
-    n == x.n || throw(DimensionMismatch("x2 has $n rows but should have $(x.n) of them"))
-    x.p2 = p2
-    x.x2 = SharedArray(Float32, n, p2, init = S -> localindexes(S) = zero(Float32), pids=pids)
-    copy!(x.x2,x2)
-    x.x2t = SharedArray(Float32, p2, n, init = S -> localindexes(S) = zero(Float32), pids=pids)
-    copy!(x.x2t,x2')
-    return nothing
-end
+# default type for addx2! is Float64
+addx2!(x::BEDFile, x2::DenseMatrix{Float64}; pids::DenseVector{Int}=procs()) = addx2!(Float64, x, x2, pids=pids) 
 
 
 function display(x::BEDFile)
@@ -252,12 +243,11 @@ function display(x::BEDFile)
     println("\tnumber of cases        = $(x.n)")
     println("\tgenetic covariates     = $(x.p)")
     println("\tnongenetic covariates  = $(x.p2)")
-    println("\tcovariate bits type    = $(typeof(x.x2))")
+    println("\tcovariate array type   = $(typeof(x.x2))")
 end
 
 
 """
-
     read_bedfile(filename [, transpose=false, pids=procs]) -> SharedVector{Int8}
 
 This function reads a PLINK binary file (BED) and returns a `SharedArray` of `Int8` numbers.
