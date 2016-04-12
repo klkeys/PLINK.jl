@@ -86,8 +86,7 @@ const bin64  = Dict{Float64, Int8}(0.0 => ZERO8, NaN => ONE8, 1.0 => TWO8, 2.0 =
 include("bedfile.jl")
 include("compression.jl")
 include("decompression.jl")
-include("gpu64.jl")
-include("gpu32.jl")
+include("gpu.jl")
 include("linalg.jl")
 
 end # end module PLINK

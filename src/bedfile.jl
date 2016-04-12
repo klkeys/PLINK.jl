@@ -212,14 +212,13 @@ copy(x::BEDFile) = BEDFile(x.x, x.xt, x.n, x.p, x.blocksize, x.tblocksize, x.x2,
 isequal(x::BEDFile, y::BEDFile) = x == y
 
 """
-    addx2!(T::Float, x::BEDFile, x2::Matrix [,pids=procs()])
+    addx2!(x::BEDFile, x2::Matrix [,pids=procs()])
 
 Add a matrix of nongenetic covariates `x2` to a BEDFile `x`.
 The optional argument `pids` controls the process IDs to which we distribute `x2`.
 If no argument is given for `T` then `addx2!` defaults to `Float64`.
 """
-function addx2!(
-    T    :: Type,
+function addx2!{T <: Float}(
     x    :: BEDFile, 
     x2   :: DenseMatrix{T}; 
     pids :: DenseVector{Int} = procs()
@@ -233,9 +232,6 @@ function addx2!(
     copy!(x.x2t, x2')
     return nothing
 end
-
-# default type for addx2! is Float64
-addx2!(x::BEDFile, x2::DenseMatrix{Float64}; pids::DenseVector{Int}=procs()) = addx2!(Float64, x, x2, pids=pids) 
 
 
 function display(x::BEDFile)

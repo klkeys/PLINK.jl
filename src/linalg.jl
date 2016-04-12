@@ -115,10 +115,10 @@ Arguments:
 - `invstds` is a vector of column precisions of `x`.
 """
 function sumsq!{T <: Float}(
-    y       :: DenseVector{Float64},
+    y       :: DenseVector{T},
     x       :: BEDFile,
-    means   :: DenseVector{Float64},
-    invstds :: DenseVector{Float64}
+    means   :: DenseVector{T},
+    invstds :: DenseVector{T}
 )
     (x.p + x.p2) == length(y) || throw(DimensionMismatch("y must have one row for every column of x"))
     @inbounds for snp = 1:x.p
@@ -147,13 +147,12 @@ Optional Arguments:
 - `means` is a vector of columns means of `x`.
 - `invstds` is a vector of column precisions of `x`.
 """
-function sumsq(
-    T       :: Type,
+function sumsq{T <: Float}(
     x       :: BEDFile;
     shared  :: Bool = true,
     pids    :: DenseVector{Int} = procs(),
-    means   :: DenseVector = mean(T, x, shared=shared, pids=pids),
-    invstds :: DenseVector = invstd(x,means, shared=shared, pids=pids)
+    means   :: DenseVector{T} = mean(T, x, shared=shared, pids=pids),
+    invstds :: DenseVector{T} = invstd(x, means, shared=shared, pids=pids)
 )
     y = ifelse(shared, SharedArray(T, x.p + x.p2, init = S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, x.p + x.p2))
     sumsq!(y,x,means,invstds)
@@ -177,7 +176,12 @@ Optional Arguments:
 - `shared` is a `Bool` to indicate whether or not to return a `SharedArray`. Defaults to `true`.
 - `pids` is a vector of process IDs over which to distribute the returned `SharedArray`. Defaults to `procs()`. Has no effect if `shared = false`.
 """
-function mean(T::Type, x::BEDFile; shared::Bool = true, pids::DenseVector{Int} = procs())
+function mean(
+    T      :: Type, 
+    x      :: BEDFile; 
+    shared :: Bool = true, 
+    pids   :: DenseVector{Int} = procs()
+)
 
     # type T must be Float
     T <: Float || throw(ArgumentError("Type T must be either Float32 or Float64"))
@@ -201,7 +205,11 @@ end
 mean(x::BEDFile; shared::Bool = true, pids::DenseVector{Int} = procs()) = mean(Float64, x, shared=shared, pids=pids)
 
 "Compute the mean of one `snp` column of a `BEDFile` object `x`. `T` is either `Float32` or `Float64` and defaults to the latter."
-function mean_col(T::Type, x::BEDFile, snp::Int)
+function mean_col(
+    T   :: Type, 
+    x   :: BEDFile, 
+    snp :: Int
+)
     # type T must be Float
     T <: Float || throw(ArgumentError("Type T must be either Float32 or Float64"))
 
@@ -244,7 +252,12 @@ Optional Arguments:
 - `shared` is a `Bool` to indicate whether or not to return a `SharedArray`. Defaults to `true`.
 - `pids` is a vector of process IDs over which to distribute the returned `SharedArray`. Defaults to `procs()`. Has no effect if `shared = false`.
 """
-function invstd{T <: Float}(x::BEDFile, means::DenseVector{T}; shared::Bool = true, pids::DenseVector{Int} = procs())
+function invstd{T <: Float}(
+    x      :: BEDFile, 
+    means  :: DenseVector{T}; 
+    shared :: Bool = true, 
+    pids   :: DenseVector{Int} = procs()
+)
 
     # type T must be Float
     T <: Float || throw(ArgumentError("Type T must be either Float32 or Float64"))
@@ -269,7 +282,12 @@ end
 
 
 "Compute the precision of one `snp` column of a `BEDFile` object `x` with column `means` of type `T` (either Float32 or Float64, defaulting to the latter)."
-function invstd_col(T::Type, x::BEDFile, snp::Int, means::DenseVector)
+function invstd_col(
+    T     :: Type, 
+    x     :: BEDFile, 
+    snp   :: Int, 
+    means :: DenseVector{T}
+)
 
     # type T must be Float
     T <: Float || throw(ArgumentError("Type T must be either Float32 or Float64"))
@@ -297,7 +315,7 @@ function invstd_col(T::Type, x::BEDFile, snp::Int, means::DenseVector)
 end
 
 # for previous function, set default bitstype to Float64
-invstd_col(x::BEDFile, snp::Int, means::DenseVector) = invstd_col(Float64, x, snp, means)
+invstd_col(x::BEDFile, snp::Int, means::DenseVector{Float64}) = invstd_col(Float64, x, snp, means)
 
 """
     dot(x,y,snp,means,invstds)
@@ -553,7 +571,7 @@ end
 
 Can also be called with a bitmask vector `mask_n` containins `0`s and `1`s which excludes or includes (respectively) elements of `x` and `b` from the dot product.
 """
-function xb{T <: T}(
+function xb{T <: Float}(
     x       :: BEDFile,
     b       :: Vector{T},
     indices :: BitArray{1},
@@ -568,7 +586,7 @@ function xb{T <: T}(
 end
 
 
-function xb{T <: T}(
+function xb{T <: Float}(
     x       :: BEDFile,
     b       :: SharedVector{T},
     indices :: BitArray{1},
