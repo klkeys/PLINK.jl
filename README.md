@@ -82,9 +82,9 @@ Use of `decompress_genotypes!` in this way is strongly discouraged since the mem
 In addition to the `mean` and `invstd` functions decribed previously, 
 PLINK.jl currently implements the following linear algebra functions:
 
-    * `sumsq` for squared L2 norms of the columns
-    * `xty!` for `x' * y`
-    * `xb!` for `x * b` 
+* `sumsq` for squared L2 norms of the columns
+* `xty!` for `x' * y`
+* `xb!` for `x * b` 
 
 Both `xty!` and `xb!` contain parallel execution kernels modeled on `pmap`; see the [parallel computing documentation](http://docs.julialang.org/en/latest/manual/parallel-computing/#scheduling) for more details.
 
