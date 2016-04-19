@@ -268,7 +268,7 @@ function invstd{T <: Float}(
     z = ifelse(shared, SharedArray(T, x.p + x.p2, init = S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, x.p + x.p2))
 
     @inbounds  for snp = 1:x.p
-        z[snp] = invstd_col(T, x, snp, means)
+        z[snp] = invstd_col(x, snp, means)
     end
     @inbounds for i = 1:x.p2
         @inbounds for j = 1:x.n
