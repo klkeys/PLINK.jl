@@ -132,13 +132,12 @@ end
 
 
 """
-    sumsq(T::Type, x::BEDFile [, shared=true, pids=procs(), means, invstds])
+    sumsq(x::BEDFile [, shared=true, pids=procs(), means, invstds])
 
 Compute the squared L2 norm of each column of a compressed matrix `x`.
 
 Arguments:
 
-- `T` is either `Float32` or `Float64`.
 - `x` is the `BEDFile` object that contains the compressed `n` x `p` design matrix from which to draw the columns.
 
 Optional Arguments:
@@ -281,16 +280,12 @@ function invstd{T <: Float}(
 end
 
 
-"Compute the precision of one `snp` column of a `BEDFile` object `x` with column `means` of type `T` (either Float32 or Float64, defaulting to the latter)."
-function invstd_col(
-    T     :: Type, 
+"Compute the precision of one `snp` column of a `BEDFile` object `x` with column `means` of type `T` (either Float32 or Float64)."
+function invstd_col{T <: Float}(
     x     :: BEDFile, 
     snp   :: Int, 
     means :: DenseVector{T}
 )
-
-    # type T must be Float
-    T <: Float || throw(ArgumentError("Type T must be either Float32 or Float64"))
 
     s = zero(T)     # accumulation variable, will eventually equal mean(x,col) for current col
     t = zero(T)     # temp variable, output of interpret_genotype
@@ -313,9 +308,6 @@ function invstd_col(
     s = ifelse(s <= zero(T), zero(T), sqrt((u - one(T)) / s))
     return s
 end
-
-# for previous function, set default bitstype to Float64
-invstd_col(x::BEDFile, snp::Int, means::DenseVector{Float64}) = invstd_col(Float64, x, snp, means)
 
 """
     dot(x,y,snp,means,invstds)
