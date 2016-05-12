@@ -191,6 +191,22 @@ function mean(
     @inbounds for snp = 1:x.p
         y[snp] = mean_col(T,x,snp)
     end
+#    np = length(pids)
+#    i = 1
+#    nextidx() = (idx=i; i+=1; idx)
+#    @sync begin
+#        for pid in pids
+#            if pid != myid() || np == 1
+#                @async begin
+#                    while true
+#                        snp = nextidx()
+#                        snp > x.p && break
+#                        @inbounds y[snp] = remotecall_fetch(pid, mean_col, T, x, snp)
+#                    end # end while
+#                end # end @async
+#            end # end if/else for pid
+#        end # end loop over pids
+#    end # end @sync
     @inbounds for i = 1:x.p2
         @inbounds for j = 1:x.n
             y[x.p + i] += x.x2[j,i]
@@ -270,6 +286,22 @@ function invstd{T <: Float}(
     @inbounds  for snp = 1:x.p
         z[snp] = invstd_col(x, snp, means)
     end
+#    np = length(pids)
+#    i = 1
+#    nextidx() = (idx=i; i+=1; idx)
+#    @sync begin
+#        for pid in pids
+#            if pid != myid() || np == 1
+#                @async begin
+#                    while true
+#                        snp = nextidx()
+#                        snp > x.p && break
+#                        @inbounds z[snp] = remotecall_fetch(pid, invstd_col, x, snp, means)
+#                    end # end while
+#                end # end @async
+#            end # end if/else for pid
+#        end # end loop over pids
+#    end # end @sync
     @inbounds for i = 1:x.p2
         @inbounds for j = 1:x.n
             z[x.p + i] += (x.x2[j,i] - means[x.p + i])^2
