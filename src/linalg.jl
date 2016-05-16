@@ -159,6 +159,19 @@ function sumsq{T <: Float}(
 end
 
 
+"A parallel execution kernel for calculating the mean."
+function mean_chunk!{T <: Float}(q::SharedVector{T}, x::BEDFile, irange)
+#    @show irange  # display so we can see what's happening
+#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have type $T"))
+    for i in irange
+        q[i] = mean_col(T, x, i) 
+    end
+    return nothing 
+end
+
+"A convenience wrapper for `mean_chunk!(T, q, x, irange)` that automatically chooses local indexes."
+mean_chunk!{T <: Float}(q::SharedVector{T}, x::BEDFile) = mean_chunk!(q, x, localindexes(q))
+
 """
     mean(T::Type, x::BEDFile [, shared=true, pids=procs()])
 
@@ -186,33 +199,31 @@ function mean(
     T <: Float || throw(ArgumentError("Type T must be either Float32 or Float64"))
 
     # initialize return vector
-    y = ifelse(shared, SharedArray(T, x.p + x.p2, init= S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, x.p + x.p2))
+    y = ifelse(shared, SharedArray(T, x.p + x.p2, init = S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, x.p + x.p2))
 
-    @inbounds for snp = 1:x.p
-        y[snp] = mean_col(T,x,snp)
-    end
-#    np = length(pids)
-#    i = 1
-#    nextidx() = (idx=i; i+=1; idx)
-#    @sync begin
-#        for pid in pids
-#            if pid != myid() || np == 1
-#                @async begin
-#                    while true
-#                        snp = nextidx()
-#                        snp > x.p && break
-#                        @inbounds y[snp] = remotecall_fetch(pid, mean_col, T, x, snp)
-#                    end # end while
-#                end # end @async
-#            end # end if/else for pid
-#        end # end loop over pids
-#    end # end @sync
-    @inbounds for i = 1:x.p2
-        @inbounds for j = 1:x.n
-            y[x.p + i] += x.x2[j,i]
+
+#    # compute mean serially
+#    @inbounds for snp = 1:x.p
+#        y[snp] = mean_col(T,x,snp)
+#    end
+
+    # taken from advection example in Julia SharedArray documentation
+    # this parallel execution structure distributes calculation of mean to all collaborating processors
+    # each one computes an independent chunk of the mean vector based on localindexes()
+    @sync begin
+        for p in procs(y)
+            @async remotecall_wait(mean_chunk!, p, y, x)
         end
-        y[x.p + i] /= x.n
     end
+
+#    @inbounds for i = 1:x.p2
+#        @inbounds for j = 1:x.n
+#            y[x.p + i] += x.x2[j,i]
+#        end
+#        y[x.p + i] /= x.n
+#    end
+
+    y[(x.p+1):end] = vec(mean(x.x2,1))
     return y
 end
 
@@ -251,6 +262,19 @@ end
 mean_col(x::BEDFile, snp::Int) = mean_col(Float64, x, snp)
 
 
+"A parallel execution kernel for calculating the inverse standard deviation."
+function invstd_chunk!{T <: Float}(q::SharedVector{T}, x::BEDFile, m::SharedVector{T}, irange)
+#    @show irange  # display so we can see what's happening
+#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have type $T"))
+    @inbounds for i in irange
+        q[i] = invstd_col(x, i, m) 
+    end
+    return nothing 
+end
+
+"A convenience wrapper for `invstd_chunk!(T, q, x, m, irange)` that automatically chooses local indexes."
+invstd_chunk!{T <: Float}(q::SharedVector{T}, x::BEDFile, m::SharedVector{T}) = invstd_chunk!(q, x, m, localindexes(q))
+
 """
     invstd(x, means [, shared=true, pids=procs()])
 
@@ -274,40 +298,33 @@ function invstd{T <: Float}(
     pids   :: DenseVector{Int} = procs()
 )
 
-    # type T must be Float
-    T <: Float || throw(ArgumentError("Type T must be either Float32 or Float64"))
-
     # check bounds
     x.p + x.p2 == length(means) || throw(BoundsError("length(means) != size(x,2)"))
 
     # initialize return vector
     z = ifelse(shared, SharedArray(T, x.p + x.p2, init = S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, x.p + x.p2))
 
-    @inbounds  for snp = 1:x.p
-        z[snp] = invstd_col(x, snp, means)
-    end
-#    np = length(pids)
-#    i = 1
-#    nextidx() = (idx=i; i+=1; idx)
-#    @sync begin
-#        for pid in pids
-#            if pid != myid() || np == 1
-#                @async begin
-#                    while true
-#                        snp = nextidx()
-#                        snp > x.p && break
-#                        @inbounds z[snp] = remotecall_fetch(pid, invstd_col, x, snp, means)
-#                    end # end while
-#                end # end @async
-#            end # end if/else for pid
-#        end # end loop over pids
-#    end # end @sync
-    @inbounds for i = 1:x.p2
-        @inbounds for j = 1:x.n
-            z[x.p + i] += (x.x2[j,i] - means[x.p + i])^2
+#    # compute precision serially
+#    @inbounds  for snp = 1:x.p
+#        z[snp] = invstd_col(x, snp, means)
+#    end
+
+    # taken from advection example in Julia SharedArray documentation
+    # this parallel execution structure distributes calculation of mean to all collaborating processors
+    # each one computes an independent chunk of the mean vector based on localindexes()
+    @sync begin
+        for p in procs(z)
+            @async remotecall_wait(invstd_chunk!, p, z, x, means)
         end
-        z[x.p + i] = sqrt((x.n - 1) / z[x.p + i])
     end
+
+#    @inbounds for i = 1:x.p2
+#        @inbounds for j = 1:x.n
+#            z[x.p + i] += (x.x2[j,i] - means[x.p + i])^2
+#        end
+#        z[x.p + i] = sqrt((x.n - 1) / z[x.p + i])
+#    end
+    z[(x.p+1):end] = 1 ./ std(x.x2,1)
     return z
 end
 
@@ -359,7 +376,8 @@ function dot{T <: Float}(
     y       :: DenseVector{T},
     snp     :: Int,
     means   :: DenseVector{T},
-    invstds :: DenseVector{T}
+    invstds :: DenseVector{T};
+    sy      :: T = sum(y)
 )
     s = zero(T)      # accumulation variable, will eventually equal dot(y,z)
     m = means[snp]   # mean of SNP predictor
@@ -372,19 +390,22 @@ function dot{T <: Float}(
             t = getindex(x,x.x,case,snp,x.blocksize)
 
             # handle exceptions on t
-            t = ifelse(isnan(t), zero(T), t - m)
+#            t = ifelse(isnan(t), zero(T), t - m)
+            t = isnan(t) ? zero(T) : t
 
             # accumulate dot product
             s += y[case] * t
         end
     else
         @inbounds for case = 1:x.n
-            s += (x.x2[case,snp-x.p] - m)  * y[case]
+#            s += (x.x2[case,snp-x.p] - m)  * y[case]
+            s += x.x2[case,snp-x.p] * y[case]
         end
     end
 
     # return the (normalized) dot product
-    return s*d
+#    return s*d
+    return (s - m*sy)*d
 end
 
 
@@ -399,11 +420,16 @@ function dot{T <: Float}(
     snp     :: Int,
     means   :: DenseVector{T},
     invstds :: DenseVector{T},
-    mask_n  :: DenseVector{Int}
+    mask_n  :: DenseVector{Int};
+    sy      :: T = sum(y),
+    sminus  :: T = sum(y[mask_n .== 0])
 )
     s = zero(T)      # accumulation variable, will eventually equal dot(y,z)
     m = means[snp]   # mean of SNP predictor
     d = invstds[snp] # 1/std of SNP predictor
+    
+    # need accumulation variable for MASKED parts of y
+    sminus = zero(T)
 
     if snp <= x.p
 
@@ -415,7 +441,8 @@ function dot{T <: Float}(
                 t = getindex(x,x.x,case,snp,x.blocksize)
 
                 # handle exceptions on t
-                t = ifelse(isnan(t), zero(T), t - m)
+#                t = ifelse(isnan(t), zero(T), t - m)
+                t = isnan(t) ? zero(T) : t
 
                 # accumulate dot product
                 s += y[case] * t
@@ -424,13 +451,15 @@ function dot{T <: Float}(
     else
         @inbounds for case = 1:x.n
             if mask_n[case] == 1
-                s += (x.x2[case,snp-x.p] - m)  * y[case]
+#                s += (x.x2[case,snp-x.p] - m)  * y[case]
+                s += x.x2[case,snp-x.p] * y[case]
             end
         end
     end
 
     # return the (normalized) dot product
-    return s*d
+#    return s*d
+    return (s - (sy - sminus)*m)*d
 end
 
 
@@ -506,29 +535,31 @@ function xb!{T <: Float}(
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
     k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
 
-#    # loop over the desired number of predictors
-#    for case = 1:x.n
-#        if mask_n[case] == 1
-#            Xb[case] = dott(x, b, case, indices, means, invstds)
-#        end
-#    end
-    np = length(pids)
-    i = 1
-    nextidx() = (idx=i; i+=1; idx)
-    @sync begin
-        for pid in pids
-            if pid != myid() || np == 1
-                @async begin
-                    while true
-                        case = nextidx()
-                        case > x.n && break
-                        mask_n[case] == 0 && continue
-                        @inbounds Xb[case] = remotecall_fetch(pid, dott, x, b, case, indices, means, invstds)
-                    end # end while
-                end # end @async
-            end # end if/else for pid
-        end # end loop over pids
-    end # end @sync
+    # loop over the desired number of predictors
+    for case = 1:x.n
+        if mask_n[case] == 1
+            Xb[case] = dott(x, b, case, indices, means, invstds)
+        end
+    end
+
+#    np = length(pids)
+#    i = 1
+#    nextidx() = (idx=i; i+=1; idx)
+#    @sync begin
+#        for pid in pids
+#            if pid != myid() || np == 1
+#                @async begin
+#                    while true
+#                        case = nextidx()
+#                        case > x.n && break
+#                        mask_n[case] == 0 && continue
+#                        @inbounds Xb[case] = remotecall_fetch(pid, dott, x, b, case, indices, means, invstds)
+#                    end # end while
+#                end # end @async
+#            end # end if/else for pid
+#        end # end loop over pids
+#    end # end @sync
+
     return nothing
 end
 
@@ -677,6 +708,40 @@ function xb{T <: Float}(
     return Xb
 end
 
+"A parallel execution kernel for calculating `x' * y`."
+function xty_chunk!{T <: Float}(
+    Xty     :: SharedVector{T}, 
+    x       :: BEDFile, 
+    y       :: SharedVector{T},
+    means   :: SharedVector{T}, 
+    invstds :: SharedVector{T},
+    mask_n  :: DenseVector{Int},
+    irange  :: UnitRange{Int},
+    sy      :: T = sum(y),
+    sminus  :: T = sum(y[mask_n .== 0])
+)
+#    @show irange  # display so we can see what's happening
+#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have type $T"))
+    @inbounds for i in irange
+        Xty[i] = dot(x, y, i, means, invstds, mask_n, sy=sy, sminus=sminus) 
+    end
+    return nothing 
+end
+
+"A convenience wrapper for `invstd_chunk!(T, q, x, m, irange)` that automatically chooses local indexes."
+function xty_chunk!{T <: Float}(
+    Xty   :: SharedVector{T}, 
+    x     :: BEDFile, 
+    y     :: SharedVector{T},
+    means :: SharedVector{T},
+    invstds :: SharedVector{T},
+    mask_n  :: DenseVector{Int},
+    sy      :: T = sum(y),
+    sminus  :: T = sum(y[mask_n .== 0])
+) 
+    xty_chunk!(Xty, x, y, means, invstds, mask_n, localindexes(Xty), sy, sminus)
+    return nothing
+end
 
 
 """
@@ -692,29 +757,21 @@ function xty!{T <: Float}(
     pids    :: DenseVector{Int} = procs(),
     means   :: SharedVector{T}  = mean(T, x, shared=true, pids=pids),
     invstds :: SharedVector{T}  = invstd(x, means, shared=true, pids=pids),
-    p       :: Int = size(x,2)
+    p       :: Int = size(x,2),
+    sy      :: T   = sum(y),
+    sminus  :: T   = sum(y[mask_n .== 0])
 )
     # error checking
     p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
     x.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
     pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes"))
 
-    np = length(pids)
-    i = 1
-    nextidx() = (idx=i; i+=1; idx)
+    # each processor will compute its own chunk of xty!
     @sync begin
-        for pid in pids
-            if pid != myid() || np == 1
-                @async begin
-                    while true
-                        snp = nextidx()
-                        snp > p && break
-                        @inbounds Xty[snp] = remotecall_fetch(pid,dot,x,y,snp,means,invstds,mask_n)
-                    end # end while
-                end # end @async
-            end # end if/else for pid
-        end # end loop over pids
-    end # end @sync
+        for q in procs(Xty)
+            @async remotecall_wait(xty_chunk!, q, Xty, x, y, means, invstds, mask_n, sy, sminus)
+        end
+    end
     return nothing
 end
 
@@ -727,19 +784,51 @@ function xty!{T <: Float}(
     means   :: Vector{T} = mean(T,x, shared=false),
     invstds :: Vector{T} = invstd(x,means, shared=false),
     p       :: Int       = size(x,2),
+    sy      :: T         = sum(y),
+    sminus  :: T         = sum(y[mask_n .== 0])
 )
     # error checking
-    x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
-    x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
+    size(x,2) <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
+    x.n == length(y)         || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
 
     # loop over the desired number of predictors
     @inbounds for snp = 1:p
-        Xty[snp] = dot(x,y,snp,means,invstds,mask_n)
+        Xty[snp] = dot(x,y,snp,means,invstds,mask_n, sy=sy, sminus=sminus)
     end
     return nothing
 end
 
 
+"A parallel execution kernel for calculating `x' * y`."
+function xty_chunk!{T <: Float}(
+    Xty     :: SharedVector{T}, 
+    x       :: BEDFile, 
+    y       :: SharedVector{T},
+    means   :: SharedVector{T}, 
+    invstds :: SharedVector{T},
+    irange  :: UnitRange{Int},
+    sy      :: T 
+)
+#    @show irange  # display so we can see what's happening
+#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have type $T"))
+    @inbounds for i in irange
+        Xty[i] = dot(x, y, i, means, invstds, sy=sy) 
+    end
+    return nothing 
+end
+
+"A convenience wrapper for `xty_chunk!(T, q, x, m, irange)` that automatically chooses local indexes."
+function xty_chunk!{T <: Float}(
+    Xty     :: SharedVector{T}, 
+    x       :: BEDFile, 
+    y       :: SharedVector{T},
+    means   :: SharedVector{T},
+    invstds :: SharedVector{T},
+    sy      :: T
+) 
+    xty_chunk!(Xty, x, y, means, invstds, localindexes(Xty), sy)
+    return nothing
+end
 
 """
     xty!(Xty, x, y, [, pids=procs(), means, invstds, p=size(x,2)])
@@ -769,29 +858,21 @@ function xty!{T <: Float}(
     pids    :: DenseVector{Int} = procs(),
     means   :: SharedVector{T}  = mean(T,x, shared=true, pids=pids),
     invstds :: SharedVector{T}  = invstd(x,means, shared=true, pids=pids),
-    p       :: Int              = size(x,2)
+    p       :: Int = size(x,2),
+    sy      :: T   = sum(y),
 )
     # error checking
     p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $p elements!"))
     x.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
     pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes"))
 
-    np = length(pids)
-    i = 1
-    nextidx() = (idx=i; i+=1; idx)
+    # each processor will compute its own chunk of xty!
     @sync begin
-        for pid in pids
-            if pid != myid() || np == 1
-                @async begin
-                    while true
-                        snp = nextidx()
-                        snp > p && break
-                        @inbounds Xty[snp] = remotecall_fetch(pid,dot,x,y,snp,means,invstds)
-                    end # end while
-                end # end @async
-            end # end if/else for pid
-        end # end loop over pids
-    end # end @sync
+        for q in procs(Xty)
+            @async remotecall_wait(xty_chunk!, q, Xty, x, y, means, invstds, sy)
+        end
+    end
+
     return nothing
 end
 
@@ -803,7 +884,8 @@ function xty!{T <: Float}(
     y       :: Vector{T};
     means   :: Vector{T} = mean(T,x, shared=false),
     invstds :: Vector{T} = invstd(x,means, shared=false),
-    p       :: Int = size(x,2)
+    p       :: Int = size(x,2),
+    sy      :: T   = sum(y),
 )
     # error checking
     x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
@@ -812,7 +894,7 @@ function xty!{T <: Float}(
 
     # loop over the desired number of predictors
     @inbounds for snp = 1:p
-        Xty[snp] = dot(x,y,snp,means,invstds)
+        Xty[snp] = dot(x,y,snp,means,invstds, sy=sy)
     end
     return nothing
 end
