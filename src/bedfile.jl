@@ -219,12 +219,12 @@ The optional argument `pids` controls the process IDs to which we distribute `x2
 If no argument is given for `T` then `addx2!` defaults to `Float64`.
 """
 function addx2!{T <: Float}(
-    x    :: BEDFile, 
-    x2   :: DenseMatrix{T}; 
+    x    :: BEDFile,
+    x2   :: DenseMatrix{T};
     pids :: DenseVector{Int} = procs()
 )
     (n,p2) = size(x2)
-    n == x.n || throw(DimensionMismatch("x2 has $n rows but should have $(x.n) of them"))
+    n == x.n || throw(DimensionMismatch("x2 hasn rows but should have(x.n) of them"))
     x.p2 = p2
     x.x2 = SharedArray(T, n, p2, init = S -> localindexes(S) = zero(T), pids=pids)
     copy!(x.x2,x2)
@@ -236,10 +236,10 @@ end
 
 function display(x::BEDFile)
     println("A BEDFile object with the following features:")
-    println("\tnumber of cases        = $(x.n)")
-    println("\tgenetic covariates     = $(x.p)")
-    println("\tnongenetic covariates  = $(x.p2)")
-    println("\tcovariate array type   = $(typeof(x.x2))")
+    println("\tnumber of cases        =(x.n)")
+    println("\tgenetic covariates     =(x.p)")
+    println("\tnongenetic covariates  =(x.p2)")
+    println("\tcovariate array type   =(typeof(x.x2))")
 end
 
 

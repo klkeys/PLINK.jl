@@ -43,7 +43,7 @@ This function efficiently computes the squared L2 (Euclidean) norm of column `sn
 
 Arguments:
 
-- `x` is the `BEDFile` object containing the compressed `n` x `p` design matrix..
+- `x` is the `BEDFile` object containing the compressed `n` x `p` design matrix.
 - `snp` is the current SNP (column) to use in calculations.
 - `means` is a vector of columns means of `x`.
 - `invstds` is a vector of column precisions of `x`.
@@ -162,11 +162,11 @@ end
 "A parallel execution kernel for calculating the mean."
 function mean_chunk!{T <: Float}(q::SharedVector{T}, x::BEDFile, irange)
 #    @show irange  # display so we can see what's happening
-#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have type $T"))
+#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have typeT"))
     for i in irange
-        q[i] = mean_col(T, x, i) 
+        q[i] = mean_col(T, x, i)
     end
-    return nothing 
+    return nothing
 end
 
 "A convenience wrapper for `mean_chunk!(T, q, x, irange)` that automatically chooses local indexes."
@@ -189,9 +189,9 @@ Optional Arguments:
 - `pids` is a vector of process IDs over which to distribute the returned `SharedArray`. Defaults to `procs()`. Has no effect if `shared = false`.
 """
 function mean(
-    T      :: Type, 
-    x      :: BEDFile; 
-    shared :: Bool = true, 
+    T      :: Type,
+    x      :: BEDFile;
+    shared :: Bool = true,
     pids   :: DenseVector{Int} = procs()
 )
 
@@ -232,8 +232,8 @@ mean(x::BEDFile; shared::Bool = true, pids::DenseVector{Int} = procs()) = mean(F
 
 "Compute the mean of one `snp` column of a `BEDFile` object `x`. `T` is either `Float32` or `Float64` and defaults to the latter."
 function mean_col(
-    T   :: Type, 
-    x   :: BEDFile, 
+    T   :: Type,
+    x   :: BEDFile,
     snp :: Int
 )
     # type T must be Float
@@ -265,11 +265,11 @@ mean_col(x::BEDFile, snp::Int) = mean_col(Float64, x, snp)
 "A parallel execution kernel for calculating the inverse standard deviation."
 function invstd_chunk!{T <: Float}(q::SharedVector{T}, x::BEDFile, m::SharedVector{T}, irange)
 #    @show irange  # display so we can see what's happening
-#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have type $T"))
+#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have typeT"))
     @inbounds for i in irange
-        q[i] = invstd_col(x, i, m) 
+        q[i] = invstd_col(x, i, m)
     end
-    return nothing 
+    return nothing
 end
 
 "A convenience wrapper for `invstd_chunk!(T, q, x, m, irange)` that automatically chooses local indexes."
@@ -292,9 +292,9 @@ Optional Arguments:
 - `pids` is a vector of process IDs over which to distribute the returned `SharedArray`. Defaults to `procs()`. Has no effect if `shared = false`.
 """
 function invstd{T <: Float}(
-    x      :: BEDFile, 
-    means  :: DenseVector{T}; 
-    shared :: Bool = true, 
+    x      :: BEDFile,
+    means  :: DenseVector{T};
+    shared :: Bool = true,
     pids   :: DenseVector{Int} = procs()
 )
 
@@ -331,8 +331,8 @@ end
 
 "Compute the precision of one `snp` column of a `BEDFile` object `x` with column `means` of type `T` (either Float32 or Float64)."
 function invstd_col{T <: Float}(
-    x     :: BEDFile, 
-    snp   :: Int, 
+    x     :: BEDFile,
+    snp   :: Int,
     means :: DenseVector{T}
 )
 
@@ -427,7 +427,7 @@ function dot{T <: Float}(
     s = zero(T)      # accumulation variable, will eventually equal dot(y,z)
     m = means[snp]   # mean of SNP predictor
     d = invstds[snp] # 1/std of SNP predictor
-    
+   
     # need accumulation variable for MASKED parts of y
     sminus = zero(T)
 
@@ -496,8 +496,8 @@ function dott{T <: Float}(
             t = getindex(x,x.xt,snp,case,x.tblocksize)
 
             # handle exceptions on t
-            t = ifelse(isnan(t), zero(T), (t - means[snp]) * invstds[snp])
-
+            t = isnan(t) ? zero(T) : (t - means[snp]) * invstds[snp]
+           
             # accumulate dot product
             s += b[snp] * t
         end
@@ -542,24 +542,6 @@ function xb!{T <: Float}(
         end
     end
 
-#    np = length(pids)
-#    i = 1
-#    nextidx() = (idx=i; i+=1; idx)
-#    @sync begin
-#        for pid in pids
-#            if pid != myid() || np == 1
-#                @async begin
-#                    while true
-#                        case = nextidx()
-#                        case > x.n && break
-#                        mask_n[case] == 0 && continue
-#                        @inbounds Xb[case] = remotecall_fetch(pid, dott, x, b, case, indices, means, invstds)
-#                    end # end while
-#                end # end @async
-#            end # end if/else for pid
-#        end # end loop over pids
-#    end # end @sync
-
     return nothing
 end
 
@@ -600,22 +582,11 @@ function xb!{T <: Float}(
     k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
     pids == procs(Xb) == procs(b) == procs(x.xt) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xb! must be seen by same processes"))
 
-    np = length(pids)
-    i = 1
-    nextidx() = (idx=i; i+=1; idx)
-    @sync begin
-        for pid in pids
-            if pid != myid() || np == 1
-                @async begin
-                    while true
-                        case = nextidx()
-                        case > x.n && break
-                        @inbounds Xb[case] = remotecall_fetch(pid, dott, x, b, case, indices, means, invstds)
-                    end # end while
-                end # end @async
-            end # end if/else for pid
-        end # end loop over pids
-    end # end @sync
+    # loop over the desired number of predictors
+    for case = 1:x.n
+        Xb[case] = dott(x, b, case, indices, means, invstds)
+    end
+
     return nothing
 end
 
@@ -710,10 +681,10 @@ end
 
 "A parallel execution kernel for calculating `x' * y`."
 function xty_chunk!{T <: Float}(
-    Xty     :: SharedVector{T}, 
-    x       :: BEDFile, 
+    Xty     :: SharedVector{T},
+    x       :: BEDFile,
     y       :: SharedVector{T},
-    means   :: SharedVector{T}, 
+    means   :: SharedVector{T},
     invstds :: SharedVector{T},
     mask_n  :: DenseVector{Int},
     irange  :: UnitRange{Int},
@@ -721,24 +692,24 @@ function xty_chunk!{T <: Float}(
     sminus  :: T = sum(y[mask_n .== 0])
 )
 #    @show irange  # display so we can see what's happening
-#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have type $T"))
+#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have typeT"))
     @inbounds for i in irange
-        Xty[i] = dot(x, y, i, means, invstds, mask_n, sy=sy, sminus=sminus) 
+        Xty[i] = dot(x, y, i, means, invstds, mask_n, sy=sy, sminus=sminus)
     end
-    return nothing 
+    return nothing
 end
 
 "A convenience wrapper for `invstd_chunk!(T, q, x, m, irange)` that automatically chooses local indexes."
 function xty_chunk!{T <: Float}(
-    Xty   :: SharedVector{T}, 
-    x     :: BEDFile, 
+    Xty   :: SharedVector{T},
+    x     :: BEDFile,
     y     :: SharedVector{T},
     means :: SharedVector{T},
     invstds :: SharedVector{T},
     mask_n  :: DenseVector{Int},
     sy      :: T = sum(y),
     sminus  :: T = sum(y[mask_n .== 0])
-) 
+)
     xty_chunk!(Xty, x, y, means, invstds, mask_n, localindexes(Xty), sy, sminus)
     return nothing
 end
@@ -801,31 +772,31 @@ end
 
 "A parallel execution kernel for calculating `x' * y`."
 function xty_chunk!{T <: Float}(
-    Xty     :: SharedVector{T}, 
-    x       :: BEDFile, 
+    Xty     :: SharedVector{T},
+    x       :: BEDFile,
     y       :: SharedVector{T},
-    means   :: SharedVector{T}, 
+    means   :: SharedVector{T},
     invstds :: SharedVector{T},
     irange  :: UnitRange{Int},
-    sy      :: T 
+    sy      :: T
 )
 #    @show irange  # display so we can see what's happening
-#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have type $T"))
+#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have typeT"))
     @inbounds for i in irange
-        Xty[i] = dot(x, y, i, means, invstds, sy=sy) 
+        Xty[i] = dot(x, y, i, means, invstds, sy=sy)
     end
-    return nothing 
+    return nothing
 end
 
 "A convenience wrapper for `xty_chunk!(T, q, x, m, irange)` that automatically chooses local indexes."
 function xty_chunk!{T <: Float}(
-    Xty     :: SharedVector{T}, 
-    x       :: BEDFile, 
+    Xty     :: SharedVector{T},
+    x       :: BEDFile,
     y       :: SharedVector{T},
     means   :: SharedVector{T},
     invstds :: SharedVector{T},
     sy      :: T
-) 
+)
     xty_chunk!(Xty, x, y, means, invstds, localindexes(Xty), sy)
     return nothing
 end

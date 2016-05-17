@@ -315,7 +315,7 @@ function decompress_genotypes!{T <: Float}(
                         Y[case,current_col] = ifelse(isnan(t), zero(T), (t - m)*d)
                         quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
                     else
-                        Y[case,current_col] = zero(T) 
+                        Y[case,current_col] = zero(T)
                     end
                 end
             else
@@ -324,7 +324,7 @@ function decompress_genotypes!{T <: Float}(
                         Y[case,current_col] = (x.x2[case,(snp-x.p)] - m) * d
                         quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
                     else
-                        Y[case,current_col] = zero(T) 
+                        Y[case,current_col] = zero(T)
                     end
                 end
             end

@@ -32,7 +32,7 @@ function compress{T <: Float}(
         # loop over cases
         for i = 1:n
             ngeno += 1
-#            println("ngeno = $ngeno, ybyte = $ybyte, i = $i, j = $j")
+#            println("ngeno =ngeno, ybyte =ybyte, i =i, j =j")
             if T == Float64
                 y[ybyte] = y[ybyte] << 2 + bin64[x[i,j]]
             else
@@ -83,7 +83,7 @@ end
 #        # loop over cases
 #        for i = 1:n
 #            ngeno += 1
-##            println("ngeno = $ngeno, ybyte = $ybyte, i = $i, j = $j")
+##            println("ngeno = $ngeno, ybyte = $ybyte, i =i, j =j")
 #            y[ybyte] = y[ybyte] << 2 + binint[x[i,j]]
 #
 #            # reset whenver we reach 4 genotypes
