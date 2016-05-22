@@ -48,14 +48,14 @@ depending on whether or not covariates are included. Covariates can always be ad
 
 ## Standardizing
 
-PLINK.jl coerces the user to use standardized copies of `x`. Since a standardized `x` cannot be stored in PLINK format, PLINK.jl calculates means and inverse standard deviations (precisions):
+PLINK.jl coerces the user to use standardized copies of `x`. Since a standardized `x` cannot be stored in PLINK format, PLINK.jl calculates means and inverse standard deviations (precisions) and stores them in separate vectors:
 
     m = mean(x)
     d = invstd(x, m)
 
 Both `m` and `d` are optional arguments for the linear algebra routines,
 but their omission will result in calculation of means and precisions on-the-fly.
-These calculations are *not* fast, so it is recommended that users precompute and cache means and precisions. 
+These calculations are *not* fast, so it is recommended that users precompute and cache the column means and precisions of a genotype matrix. 
 
 ## Decompression
 
@@ -86,7 +86,8 @@ PLINK.jl currently implements the following linear algebra functions:
 * `xty!` for `x' * y`
 * `xb!` for `x * b` 
 
-Both `xty!` and `xb!` contain parallel execution kernels modeled on `pmap`; see the [parallel computing documentation](http://docs.julialang.org/en/latest/manual/parallel-computing/#scheduling) for more details.
+`xty!` contains a parallel execution kernels modeled on the `advection_shared!` example from the [Julia parallel computing documentation](http://docs.julialang.org/en/latest/manual/parallel-computing/#id2).
+Currently `xb!` is not parallelized because it is optimized for sparse vector multiplicands, though this could change in the future.
 
 ## GPU acceleration
 
