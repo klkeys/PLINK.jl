@@ -1,93 +1,91 @@
-# GET THE VALUE OF A GENOTYPE IN A COMPRESSED MATRIX
-# argument X is almost vacuous because it ensures no conflict with current Array implementations
-# it becomes useful for accessing nongenetic covariates
-function getindex(
+"""
+    getindex(X::BEDFile, x, x2, row, col)
+
+The standard array access, coded for `BEDFile`s. Argument `X` is *almost* vacuous.
+It primarily ensures no conflict with current Array implementations of `getindex`.
+However, it becomes useful for accessing nongenetic covariates and checking the blocksize.
+The default is to access the column-major PLINK file; for row-major access, use `X.xt` in argument `x`.
+"""
+function getindex{T <: Float}(
     X         :: BEDFile,
     x         :: DenseVector{Int8},
+    x2        :: DenseVecOrMat{T},
     row       :: Int,
     col       :: Int,
-    blocksize :: Int;
-    interpret :: Bool = true,
-    float32   :: Bool = false
 )
-    if col <= X.p
-        genotype_block = x[(col-1)*blocksize + ((row - 1) >>> 2) + 1]
-        k = 2*((row-1) & 3)
-        genotype = (genotype_block >>> k) & THREE8
-        interpret && float32 && return geno32[genotype + ONE8]
-        interpret && return geno64[genotype + ONE8]
-        return genotype
-    else
-        return X.x2[row,(col-X.p)]
-    end
+    col > X.p && return X.x2[row,(col-X.p)]
+    genotype_block = x[(col-1)*X.blocksize + ((row - 1) >>> 2) + 1]
+    k = 2*((row-1) & 3)
+    genotype = (genotype_block >>> k) & THREE8
+    return int2geno[T][genotype + ONE8]
 end
 
-# default for getindex with BEDFile, to enable array-like indexing
-getindex(x::BEDFile, row::Int, col::Int) = getindex(x, x.x, row, col, x.blocksize, interpret=true, float32=false)
+getindex(x::BEDFile, row::Int, col::Int) = getindex(x, x.x, x.x2, row, col)
 
-function getindex(x::BEDFile, rowidx::BitArray{1}, colidx::BitArray{1})
-
-    yn = sum(rowidx)
-    yp = sum(colidx)
-    yblock  = ((yn-1) >>> 2) + 1
-    ytblock = ((yp-1) >>> 2) + 1
-
-    y   = subset_genotype_matrix(x, x.x, rowidx, colidx, x.n, x.p, x.blocksize, yn=yn, yp=yp, yblock=yblock, ytblock=ytblock)
-    yt  = subset_genotype_matrix(x, x.xt, colidx, rowidx, x.p, x.n, x.tblocksize, yn=yp, yp=yn, yblock=ytblock, ytblock=yblock)
-    y2  = x.x2[rowidx,colidx]
-    y2t = y2'
-    p2  = size(y2,2)
-
-    return BEDFile(y,yt,yn,yp,yblock,ytblock,y2,p2,y2')
-end
-
-function getindex(x::BEDFile, rowidx::UnitRange{Int64}, colidx::BitArray{1})
-
-    yn = length(rowidx)
-    yp = sum(colidx)
-    yblock  = ((yn-1) >>> 2) + 1
-    ytblock = ((yp-1) >>> 2) + 1
-
-    y  = subset_genotype_matrix(x, x.x, rowidx, colidx, x.n, x.p, x.blocksize, yn=yn, yp=yp, yblock=yblock, ytblock=ytblock)
-    yt = subset_genotype_matrix(x, x.xt, colidx, rowidx, x.p, x.n, x.tblocksize, yn=yp, yp=yn, yblock=ytblock, ytblock=yblock)
-    y2 = x.x2[rowidx,colidx]
-    p2 = size(y2,2)
-
-    return BEDFile(y,yt,yn,yp,yblock,ytblock,y2,p2)
-end
-
-function getindex(x::BEDFile, rowidx::BitArray{1}, colidx::UnitRange{Int64})
-
-    yn = sum(rowidx)
-    yp = length(colidx)
-    yblock  = ((yn-1) >>> 2) + 1
-    ytblock = ((yp-1) >>> 2) + 1
-
-    y   = subset_genotype_matrix(x, x.x, rowidx, colidx, x.n, x.p, x.blocksize, yn=yn, yp=yp, yblock=yblock, ytblock=ytblock)
-    yt  = subset_genotype_matrix(x, x.xt, colidx, rowidx, x.p, x.n, x.tblocksize, yn=yp, yp=yn, yblock=ytblock, ytblock=yblock)
-    y2  = x.x2[rowidx,colidx]
-    p2  = size(y2,2)
-    y2t = y2'
-
-    return BEDFile(y,yt,yn,yp,yblock,ytblock,y2,p2,y2t)
-end
-
-
-function getindex(x::BEDFile, rowidx::UnitRange{Int64}, colidx::UnitRange{Int64})
-
-    yn = length(rowidx)
-    yp = length(colidx)
-    yblock  = ((yn-1) >>> 2) + 1
-    ytblock = ((yp-1) >>> 2) + 1
-
-    y   = subset_genotype_matrix(x, x.x, rowidx, colidx, x.n, x.p, x.blocksize, yn=yn, yp=yp, yblock=yblock, ytblock=ytblock)
-    yt  = subset_genotype_matrix(x, x.xt, colidx, rowidx, x.p, x.n, x.tblocksize, yn=yp, yp=yn, yblock=ytblock, ytblock=yblock)
-    y2  = x.x2[rowidx,colidx]
-    p2  = size(y2,2)
-    y2t = y2'
-
-    return BEDFile(y,yt,yn,yp,yblock,ytblock,y2,p2,y2t)
-end
+### old code, never used?
+#function getindex(x::BEDFile, rowidx::BitArray{1}, colidx::BitArray{1})
+#
+#    yn = sum(rowidx)
+#    yp = sum(colidx)
+#    yblock  = ((yn-1) >>> 2) + 1
+#    ytblock = ((yp-1) >>> 2) + 1
+#
+#    y   = subset_genotype_matrix(x, x.x, rowidx, colidx, x.n, x.p, x.blocksize, yn=yn, yp=yp, yblock=yblock, ytblock=ytblock)
+#    yt  = subset_genotype_matrix(x, x.xt, colidx, rowidx, x.p, x.n, x.tblocksize, yn=yp, yp=yn, yblock=ytblock, ytblock=yblock)
+#    y2  = x.x2[rowidx,colidx]
+#    y2t = y2'
+#    p2  = size(y2,2)
+#
+#    return BEDFile(y,yt,yn,yp,yblock,ytblock,y2,p2,y2')
+#end
+#
+#function getindex(x::BEDFile, rowidx::UnitRange{Int64}, colidx::BitArray{1})
+#
+#    yn = length(rowidx)
+#    yp = sum(colidx)
+#    yblock  = ((yn-1) >>> 2) + 1
+#    ytblock = ((yp-1) >>> 2) + 1
+#
+#    y  = subset_genotype_matrix(x, x.x, rowidx, colidx, x.n, x.p, x.blocksize, yn=yn, yp=yp, yblock=yblock, ytblock=ytblock)
+#    yt = subset_genotype_matrix(x, x.xt, colidx, rowidx, x.p, x.n, x.tblocksize, yn=yp, yp=yn, yblock=ytblock, ytblock=yblock)
+#    y2 = x.x2[rowidx,colidx]
+#    p2 = size(y2,2)
+#
+#    return BEDFile(y,yt,yn,yp,yblock,ytblock,y2,p2)
+#end
+#
+#function getindex(x::BEDFile, rowidx::BitArray{1}, colidx::UnitRange{Int64})
+#
+#    yn = sum(rowidx)
+#    yp = length(colidx)
+#    yblock  = ((yn-1) >>> 2) + 1
+#    ytblock = ((yp-1) >>> 2) + 1
+#
+#    y   = subset_genotype_matrix(x, x.x, rowidx, colidx, x.n, x.p, x.blocksize, yn=yn, yp=yp, yblock=yblock, ytblock=ytblock)
+#    yt  = subset_genotype_matrix(x, x.xt, colidx, rowidx, x.p, x.n, x.tblocksize, yn=yp, yp=yn, yblock=ytblock, ytblock=yblock)
+#    y2  = x.x2[rowidx,colidx]
+#    p2  = size(y2,2)
+#    y2t = y2'
+#
+#    return BEDFile(y,yt,yn,yp,yblock,ytblock,y2,p2,y2t)
+#end
+#
+#
+#function getindex(x::BEDFile, rowidx::UnitRange{Int64}, colidx::UnitRange{Int64})
+#
+#    yn = length(rowidx)
+#    yp = length(colidx)
+#    yblock  = ((yn-1) >>> 2) + 1
+#    ytblock = ((yp-1) >>> 2) + 1
+#
+#    y   = subset_genotype_matrix(x, x.x, rowidx, colidx, x.n, x.p, x.blocksize, yn=yn, yp=yp, yblock=yblock, ytblock=ytblock)
+#    yt  = subset_genotype_matrix(x, x.xt, colidx, rowidx, x.p, x.n, x.tblocksize, yn=yp, yp=yn, yblock=ytblock, ytblock=yblock)
+#    y2  = x.x2[rowidx,colidx]
+#    p2  = size(y2,2)
+#    y2t = y2'
+#
+#    return BEDFile(y,yt,yn,yp,yblock,ytblock,y2,p2,y2t)
+#end
 
 
 """
@@ -122,11 +120,7 @@ function decompress_genotypes!{T <: Float}(
             s = invstds[j]
         end
         @inbounds for i = 1:n
-            if T == Float64
-                Y[i,j] = getindex(x,x.x,i,j,x.blocksize,interpret=true,float32=false)
-            else
-                Y[i,j] = getindex(x,x.x,i,j,x.blocksize,interpret=true,float32=true)
-            end
+            Y[i,j] = getindex(x, x.x, i, j)
             if standardize
                 Y[i,j] = (Y[i,j] - m) * s
             end
@@ -181,11 +175,7 @@ function decompress_genotypes!{T <: Float}(
 
             if snp <= x.p
                 @inbounds for case = 1:n
-                    if T == Float64
-                        t = getindex(x,x.x,case,snp,x.blocksize)
-                    else
-                        t = getindex(x,x.x,case,snp,x.blocksize, float32=true)
-                    end
+                    t = getindex(x,x.x,case,snp)
                     Y[case,current_col] = ifelse(isnan(t), zero(T), (t - m)*d)
                     quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
                 end
@@ -239,11 +229,7 @@ function decompress_genotypes!{T <: Float}(
         d = invstds[snp]
         if snp <= x.p
             @inbounds for case = 1:n
-                if T == Float64
-                    t = getindex(x,x.x,case,snp,x.blocksize)
-                else
-                    t = getindex(x,x.x,case,snp,x.blocksize, float32=true)
-                end
+                t = getindex(x,x.x,case,snp)
                 Y[case,current_col] = ifelse(isnan(t), zero(T), (t - m)*d)
                 quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
             end
@@ -307,11 +293,7 @@ function decompress_genotypes!{T <: Float}(
             if snp <= x.p
                 @inbounds for case = 1:n
                     if mask_n[case] == 1
-                        if T == Float64
-                            t = getindex(x,x.x,case,snp,x.blocksize)
-                        else
-                            t = getindex(x,x.x,case,snp,x.blocksize, float32=true)
-                        end
+                        t = getindex(x,x.x,case,snp)
                         Y[case,current_col] = ifelse(isnan(t), zero(T), (t - m)*d)
                         quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
                     else
@@ -364,11 +346,7 @@ function decompress_genotypes!{T <: Float}(
     t = zero(T)
     if snp <= x.p
         @inbounds for case = 1:x.n
-            if T == Float64
-                t = getindex(x,x.x,case,snp,x.blocksize)
-            else
-                t = getindex(x,x.x,case,snp,x.blocksize, float32=true)
-            end
+            t = getindex(x,x.x,case,snp)
             y[case] = ifelse(isnan(t), zero(T), (t - m)*d)
         end
     else
