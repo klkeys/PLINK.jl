@@ -120,7 +120,7 @@ function decompress_genotypes!{T <: Float}(
             s = invstds[j]
         end
         @inbounds for i = 1:n
-            Y[i,j] = getindex(x, x.x, i, j)
+            Y[i,j] = x[i, j]
             if standardize
                 Y[i,j] = (Y[i,j] - m) * s
             end
@@ -175,7 +175,7 @@ function decompress_genotypes!{T <: Float}(
 
             if snp <= x.p
                 @inbounds for case = 1:n
-                    t = getindex(x,x.x,case,snp)
+                    t = x[case,snp]
                     Y[case,current_col] = ifelse(isnan(t), zero(T), (t - m)*d)
                     quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
                 end
@@ -229,7 +229,7 @@ function decompress_genotypes!{T <: Float}(
         d = invstds[snp]
         if snp <= x.p
             @inbounds for case = 1:n
-                t = getindex(x,x.x,case,snp)
+                t = x[case,snp]
                 Y[case,current_col] = ifelse(isnan(t), zero(T), (t - m)*d)
                 quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
             end
@@ -293,7 +293,7 @@ function decompress_genotypes!{T <: Float}(
             if snp <= x.p
                 @inbounds for case = 1:n
                     if mask_n[case] == 1
-                        t = getindex(x,x.x,case,snp)
+                        t = x[case,snp]
                         Y[case,current_col] = ifelse(isnan(t), zero(T), (t - m)*d)
                         quiet || println("Y[$case,$current_col] = ", Y[case, current_col])
                     else
@@ -346,7 +346,7 @@ function decompress_genotypes!{T <: Float}(
     t = zero(T)
     if snp <= x.p
         @inbounds for case = 1:x.n
-            t = getindex(x,x.x,case,snp)
+            t = x[case,snp]
             y[case] = ifelse(isnan(t), zero(T), (t - m)*d)
         end
     else
