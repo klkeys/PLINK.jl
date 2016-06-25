@@ -12,24 +12,16 @@ import Base.getindex
 import Base.length
 import Base.ndims
 import Base.display
+import Base.convert
 
 export BEDFile
-export decompress_genotypes!
-export decompress_genotypes
-export subset_bedfile
-export xb!
-export xb
-export xty!
-export xty
-export update_residuals!
-export update_partial_residuals!
-export sumsq!
-export sumsq
-export mean
-export invstd
+export decompress_genotypes!, decompress_genotypes
+export A_mul_B!, A_mul_B
+export At_mul_B!, At_mul_B
+export sumsq!, sumsq
+export mean!, prec!
 export maf
 export getindex
-export addx2!
 export compress
 
 # constants used for decompression purposes
@@ -46,9 +38,6 @@ const MNUM2  = convert(Int8,27)
 
 # typealias floating point operations
 typealias Float Union{Float32, Float64}
-
-# convenient alias for SharedArray vector + matrix
-typealias SharedVecOrMat{T} Union{SharedVector{T}, SharedMatrix{T}}
 
 """
 This lookup table encodes the following PLINK format for genotypes:
@@ -71,22 +60,31 @@ and so the first four genotypes are read as follows:
     01101100
     HGFEDCBA
 
-          AB   00  -> homozygote (first)
-        CD     11  -> other homozygote (second)
-      EF       01  -> heterozygote (third)
-    GH         10  -> missing genotype (fourth)
+          AB   00  -> homozygote (first)        -> 0 
+        CD     11  -> other homozygote (second) -> 2
+      EF       01  -> heterozygote (third)      -> 1
+    GH         10  -> missing genotype (fourth) -> NaN
 
 Finally, when we reach the end of a SNP (or if in individual-mode, the end of an individual),
 then we skip to the start of a new byte (i.e. skip any remaining bits in that byte).
 For a precise desceiption of PLINK BED files, see the file type reference in the [PLINK documentation](http://pngu.mgh.harvard.edu/~purcell/plink/binary.shtml).
+
+The implementation here uses bitshifting and a bit threshold against `Int8` value 3 to interpret the compressed data.
+The bitshifting trick works left-to-right, in contrast to the PLINK convention of reading right-to-left.
+Thus, the map in PLINK.jl is slightly different:
+
+- 00 -> 0 -> 0.0
+- 11 -> 3 -> 2.0
+- **10 -> 2 -> 1.0**
+- **01 -> 1 -> NaN** 
 """
-const geno32 = [0.0f0, NaN32, 1.0f0, 2.0f0]
-const geno64 = [0.0, NaN, 1.0, 2.0]
+const genofloat = [0.0, NaN, 1.0, 2.0]
+
 const bin32  = Dict{Float32, Int8}(0.0f0 => ZERO8, NaN32 => ONE8, 1.0f0 => TWO8, 2.0f0 => THREE8)
 const bin64  = Dict{Float64, Int8}(0.0 => ZERO8, NaN => ONE8, 1.0 => TWO8, 2.0 => THREE8)
-const int2geno = Dict{Type, Vector{Float}}(Float32 => geno32, Float64 => geno64)
-#const binint = Dict{Integer, Int8}(0 => ZERO8, NaN => ONE8, 1.0 => TWO8, 2.0 => THREE8)
 
+include("covariate.jl")
+include("genomatrix.jl")
 include("bedfile.jl")
 include("compression.jl")
 include("decompression.jl")

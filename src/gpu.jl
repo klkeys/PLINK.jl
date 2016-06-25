@@ -24,15 +24,11 @@ function df_x2!{T <: Float}(
     x       :: DenseMatrix{T},
     r       :: DenseVector{T},
     mask_n  :: DenseVector{Int},
-    means   :: DenseVector{T},
-    invstds :: DenseVector{T},
-    n       :: Int,
-    p       :: Int
 )
-    m = means[p+snp]
-    s = invstds[p+snp]
+    m = x.means[x.geno.p+snp]
+    s = x.precs[x.geno.p+snp]
     df[p+snp] = zero(T)
-    @inbounds for case = 1:n
+    @inbounds for case = 1:x.geno.n
         if mask_n[case] == 1
             df[p+snp] += r[case] * (x[case,snp] - m) * s
         end
@@ -40,20 +36,18 @@ function df_x2!{T <: Float}(
     return nothing
 end
 
-"`xty!()` can also be called with a configured GPU command queue."
-function xty!{T <: Float}(
+"`At_mul_B!()` can also be called with a configured GPU command queue."
+function At_mul_B!{T <: Float}(
     df          :: SharedVector{T},
     df_buff     :: cl.Buffer,
-    x           :: BEDFile,
+    x           :: BEDFile{T},
     x_buff      :: cl.Buffer,
     y           :: SharedVector{T},
     y_buff      :: cl.Buffer,
     mask_n      :: DenseVector{Int},
     mask_buff   :: cl.Buffer,
     queue       :: cl.CmdQueue,
-    means       :: SharedVector{T},
     m_buff      :: cl.Buffer,
-    invstds     :: SharedVector{T},
     p_buff      :: cl.Buffer,
     red_buff    :: cl.Buffer,
     xtyk        :: cl.Kernel,
@@ -81,25 +75,23 @@ function xty!{T <: Float}(
     cl.wait(cl.call(queue, rxtyk, (wg_size,p,1), (wg_size,1,1), n32, y_chunks32, y_blocks32, wg_size32, red_buff, df_buff, genofloat))
     cl.wait(cl.copy!(queue, sdata(df), df_buff))
     @inbounds for snp = 1:p2
-        df_x2!(snp, df, x.x2, y, mask_n, means, invstds, n, x.p)
+        df_x2!(snp, df, x.covar.x, y, mask_n)
     end
     return nothing
 end
 
 
-function xty!{T <: Float}(
+function At_mul_B!{T <: Float}(
     df          :: Vector{T},
     df_buff     :: cl.Buffer,
-    x           :: BEDFile,
+    x           :: BEDFile{T},
     x_buff      :: cl.Buffer,
     y           :: Vector{T},
     y_buff      :: cl.Buffer,
     mask_n      :: DenseVector{Int},
     mask_buff   :: cl.Buffer,
     queue       :: cl.CmdQueue,
-    means       :: Vector{T},
     m_buff      :: cl.Buffer,
-    invstds     :: Vector{T},
     p_buff      :: cl.Buffer,
     red_buff    :: cl.Buffer,
     xtyk        :: cl.Kernel,
@@ -127,7 +119,7 @@ function xty!{T <: Float}(
     cl.wait(cl.call(queue, rxtyk, (wg_size,p,1), (wg_size,1,1), n32, y_chunks32, y_blocks32, wg_size32, red_buff, df_buff, genofloat))
     cl.wait(cl.copy!(queue, sdata(df), df_buff))
     @inbounds for snp = 1:p2
-        df_x2!(snp, df, x.x2, r, mask_n, means, invstds, n, x.p)
+        df_x2!(snp, df, x.covar.x, r, mask_n)
     end
     return nothing
 end
@@ -135,21 +127,19 @@ end
 
 
 """
-    xty(x::BEDFile, y, kernfile, mask_n)
+    At_mul_B(x::BEDFile, y, kernfile, mask_n)
 
-If called with a kernel file, then `xty()` will attempt to accelerate computations with a GPU.
+If called with a kernel file, then `At_mul_B()` will attempt to accelerate computations with a GPU.
 """
 function xty{T <: Float}(
-    x           :: BEDFile,
+    x           :: BEDFile{T},
     y           :: SharedVector{T},
-    kernfile    :: ASCIIString,
+    kernfile    :: AbstractString,
     mask_n      :: DenseVector{Int};
     pids        :: DenseVector{Int} = procs(),
-    means       :: SharedVector{T}  = mean(T, x, shared=true, pids=pids),
-    invstds     :: SharedVector{T}  = invstd(x, means, shared=true, pids=pids),
-    n           :: Int              = x.n,
-    p           :: Int              = x.p,
-    p2          :: Int              = x.p2,
+    n           :: Int              = x.geno.n,
+    p           :: Int              = x.geno.p,
+    p2          :: Int              = x.covar.p,
     wg_size     :: Int              = 512,
     y_chunks    :: Int              = div(n, wg_size) + (n % wg_size != 0 ? 1 : 0),
     y_blocks    :: Int              = div(y_chunks, wg_size) + (y_chunks % wg_size != 0 ? 1 : 0),
@@ -159,7 +149,7 @@ function xty{T <: Float}(
     p32         :: Int32            = convert(Int32, p),
     y_chunks32  :: Int32            = convert(Int32, y_chunks),
     y_blocks32  :: Int32            = convert(Int32, y_blocks),
-    blocksize32 :: Int32            = convert(Int32, X.blocksize),
+    blocksize32 :: Int32            = convert(Int32, x.geno.blocksize),
     r_length32  :: Int32            = convert(Int32, p*y_chunks),
     device      :: cl.Device        = last(cl.devices(:gpu)),
     ctx         :: cl.Context       = cl.Context(device),
@@ -168,30 +158,28 @@ function xty{T <: Float}(
     xtyk        :: cl.Kernel        = cl.Kernel(program, "compute_xt_times_vector"),
     rxtyk       :: cl.Kernel        = cl.Kernel(program, "reduce_xt_vec_chunks"),
     reset_x     :: cl.Kernel        = cl.Kernel(program, "reset_x"),
-    x_buff      :: cl.Buffer        = cl.Buffer(Int8,    ctx, (:r,  :copy), hostbuf = sdata(X.x)),
-    y_buff      :: cl.Buffer        = cl.Buffer(T, ctx, (:r,  :copy), hostbuf = sdata(r)),
-    m_buff      :: cl.Buffer        = cl.Buffer(T, ctx, (:r,  :copy), hostbuf = sdata(means)),
-    p_buff      :: cl.Buffer        = cl.Buffer(T, ctx, (:r,  :copy), hostbuf = sdata(invstds)),
-    red_buff    :: cl.Buffer        = cl.Buffer(T, ctx, (:rw), x.p + p2 * y_chunks),
-    xty_buff    :: cl.Buffer        = cl.Buffer(T, ctx, (:rw), x.p + p2),
-    mask_buff   :: cl.Buffer        = cl.Buffer(Int,     ctx, (:r,  :copy), hostbuf = sdata(mask_n)),
+    x_buff      :: cl.Buffer        = cl.Buffer(Int8, ctx, (:r,  :copy), hostbuf = sdata(x.geno.x)),
+    y_buff      :: cl.Buffer        = cl.Buffer(T,    ctx, (:r,  :copy), hostbuf = sdata(y)),
+    m_buff      :: cl.Buffer        = cl.Buffer(T,    ctx, (:r,  :copy), hostbuf = sdata(x.means)),
+    p_buff      :: cl.Buffer        = cl.Buffer(T,    ctx, (:r,  :copy), hostbuf = sdata(x.precs)),
+    red_buff    :: cl.Buffer        = cl.Buffer(T,    ctx, (:rw), x.p + p2*y_chunks),
+    xty_buff    :: cl.Buffer        = cl.Buffer(T,    ctx, (:rw), x.p + p2),
+    mask_buff   :: cl.Buffer        = cl.Buffer(Int,  ctx, (:r,  :copy), hostbuf = sdata(mask_n)),
     genofloat   :: cl.LocalMem      = cl.LocalMem(T, wg_size)
 )
-    XtY = SharedArray(T, x.p + x.p2, init = S -> S[localindexes(S)] = zero(T), pids=pids)
-    xty!(XtY, xty_buff, x, x_buff, y, y_buff, mask_n, mask_buff, queue, means, m_buff, invstds, p_buff, red_buff, xtyk, rxtyk, reset_x, wg_size, y_chunks, r_chunks, n, p, x.p2, n32, p32, y_chunks32, blocksize32, wg_size32, y_blocks32, r_length32, genofloat)
-    return XtY
+    xty = SharedArray(T, size(x,2), init = S -> S[localindexes(S)] = zero(T), pids=pids)
+    At_mul_B!(xty, xty_buff, x, x_buff, y, y_buff, mask_n, mask_buff, queue, m_buff, p_buff, red_buff, xtyk, rxtyk, reset_x, wg_size, y_chunks, r_chunks, n, p, x.covar.p, n32, p32, y_chunks32, blocksize32, wg_size32, y_blocks32, r_length32, genofloat)
+    return xty
 end
 
 function xty{T <: Float}(
-    x           :: BEDFile,
+    x           :: BEDFile{T},
     y           :: Vector{T},
-    kernfile    :: ASCIIString,
+    kernfile    :: AbstractString,
     mask_n      :: DenseVector{Int};
-    means       :: Vector{T}   = mean(T, x),
-    invstds     :: Vector{T}   = invstd(x, means),
-    n           :: Int         = x.n,
-    p           :: Int         = x.p,
-    p2          :: Int         = x.p2,
+    n           :: Int         = x.geno.n,
+    p           :: Int         = x.geno.p,
+    p2          :: Int         = x.covar.p,
     wg_size     :: Int         = 512,
     y_chunks    :: Int         = div(n, wg_size) + (n % wg_size != 0 ? 1 : 0),
     y_blocks    :: Int         = div(y_chunks, wg_size) + (y_chunks % wg_size != 0 ? 1 : 0),
@@ -201,7 +189,7 @@ function xty{T <: Float}(
     p32         :: Int32       = convert(Int32, p),
     y_chunks32  :: Int32       = convert(Int32, y_chunks),
     y_blocks32  :: Int32       = convert(Int32, y_blocks),
-    blocksize32 :: Int32       = convert(Int32, X.blocksize),
+    blocksize32 :: Int32       = convert(Int32, x.geno.blocksize),
     r_length32  :: Int32       = convert(Int32, p*y_chunks),
     device      :: cl.Device   = last(cl.devices(:gpu)),
     ctx         :: cl.Context  = cl.Context(device),
@@ -210,16 +198,16 @@ function xty{T <: Float}(
     xtyk        :: cl.Kernel   = cl.Kernel(program, "compute_xt_times_vector"),
     rxtyk       :: cl.Kernel   = cl.Kernel(program, "reduce_xt_vec_chunks"),
     reset_x     :: cl.Kernel   = cl.Kernel(program, "reset_x"),
-    x_buff      :: cl.Buffer   = cl.Buffer(Int8,ctx, (:r,  :copy), hostbuf = sdata(X.x)),
-    y_buff      :: cl.Buffer   = cl.Buffer(T,   ctx, (:r,  :copy), hostbuf = sdata(r)),
-    m_buff      :: cl.Buffer   = cl.Buffer(T,   ctx, (:r,  :copy), hostbuf = sdata(means)),
-    p_buff      :: cl.Buffer   = cl.Buffer(T,   ctx, (:r,  :copy), hostbuf = sdata(invstds)),
-    red_buff    :: cl.Buffer   = cl.Buffer(T,   ctx, (:rw), p + p2 * y_chunks),
-    xty_buff    :: cl.Buffer   = cl.Buffer(T,   ctx, (:rw), p + p2),
-    mask_buff   :: cl.Buffer   = cl.Buffer(Int, ctx, (:r,  :copy), hostbuf = sdata(mask_n)),
+    x_buff      :: cl.Buffer   = cl.Buffer(Int8, ctx, (:r,  :copy), hostbuf = sdata(x.geno.x)),
+    y_buff      :: cl.Buffer   = cl.Buffer(T,    ctx, (:r,  :copy), hostbuf = sdata(y)),
+    m_buff      :: cl.Buffer   = cl.Buffer(T,    ctx, (:r,  :copy), hostbuf = sdata(x.means)),
+    p_buff      :: cl.Buffer   = cl.Buffer(T,    ctx, (:r,  :copy), hostbuf = sdata(x.precs)),
+    red_buff    :: cl.Buffer   = cl.Buffer(T,    ctx, (:rw), p + p2*y_chunks),
+    xty_buff    :: cl.Buffer   = cl.Buffer(T,    ctx, (:rw), p + p2),
+    mask_buff   :: cl.Buffer   = cl.Buffer(Int,  ctx, (:r,  :copy), hostbuf = sdata(mask_n)),
     genofloat   :: cl.LocalMem = cl.LocalMem(T, wg_size)
 )
-    XtY = zeros(T, x.p + x.p2)
-    xty!(XtY, xty_buff, x, x_buff, y, y_buff, mask_n, mask_buff, queue, means, m_buff, invstds, p_buff, red_buff, xtyk, rxtyk, reset_x, wg_size, y_chunks, r_chunks, n, p, x.p2, n32, p32, y_chunks32, blocksize32, wg_size32, y_blocks32, r_length32, genofloat)
-    return XtY
+    xty = zeros(T, x.p + x.p2)
+    At_mul_B!(xty, xty_buff, x, x_buff, y, y_buff, mask_n, mask_buff, queue, m_buff, p_buff, red_buff, xtyk, rxtyk, reset_x, wg_size, y_chunks, r_chunks, n, p, x.covar.p, n32, p32, y_chunks32, blocksize32, wg_size32, y_blocks32, r_length32, genofloat)
+    return xty
 end

@@ -15,29 +15,21 @@ Output:
 
 - A vector `z` of MAFs.
 """
-function maf(x::BEDFile; y::DenseVector{Float64} = zeros(Float64,x.n))
+function maf{T <: Float}(
+    x :: BEDFile{T};
+    y :: DenseVector{Float64} = zeros(Float64,x.geno.n)
+)
     z = zeros(Float64,x.p)
     @inbounds for i = 1:x.p
         decompress_genotypes!(y,x,i)
-        z[i] = (min( sum(y .== one(Float64)), sum(y .== -one(Float64))) + 0.5*sum(y .== zero(Float64))) / (x.n - sum(isnan(y)))
+        z[i] = (min( sum(y .== one(Float64)), sum(y .== -one(Float64))) + sum(y .== zero(Float64))) / (x.n - sum(isnan(y))) / 2
     end
     return z
 end
-
-
-function maf(x::BEDFile; y::DenseVector{Float32} = zeros(Float32,x.n))
-    z = zeros(Float32,x.p)
-    @inbounds for i = 1:x.p
-        decompress_genotypes!(y,x,i)
-        z[i] = (min( sum(y .== one(Float32)), sum(y .== -one(Float32))) + 0.5f0*sum(y .== zero(Float32))) / (x.n - sum(isnan(y)))
-    end
-    return z
-end
-
 
 
 """
-    sumsq_snp(x, snp, means, invstds)
+    sumsq_snp(x, snp)
 
 This function efficiently computes the squared L2 (Euclidean) norm of column `snp` of a `BEDFile` object `x`, i.e. sumabs2(x[:,snp]).
 
@@ -45,24 +37,17 @@ Arguments:
 
 - `x` is the `BEDFile` object containing the compressed `n` x `p` design matrix.
 - `snp` is the current SNP (column) to use in calculations.
-- `means` is a vector of columns means of `x`.
-- `invstds` is a vector of column precisions of `x`.
 """
-function sumsq_snp{T <: Float}(
-    x       :: BEDFile,
-    snp     :: Int,
-    means   :: DenseVector{T},
-    invstds :: DenseVector{T}
-)
+function sumsq_snp{T <: Float}(x::BEDFile{T}, snp::Int)
     s = zero(T)       # accumulation variable, will eventually equal dot(y,z)
     t = zero(T)       # temp variable, output of interpret_genotype
-    m = means[snp]
-    d = invstds[snp]
+    m = x.means[snp]
+    d = x.precs[snp]
 
     # loop over all n individuals
-    @inbounds for case = 1:x.n
-        t = getindex(x,x.x,case,snp,x.blocksize)
-        t = ifelse(isnan(t), zero(T), (t - m)*d)
+    @inbounds @fastmath @simd for case = 1:x.geno.n
+        t = x[case,snp]
+        t = isnan(t) ? zero(T) : (t - m)*d
         s += t*t
     end
     return s
@@ -71,7 +56,7 @@ end
 
 
 """
-    sumsq_covariate(x, covariate, means, invstds)
+    sumsq_covariate(x, covariate) 
 
 This function efficiently computes the squared L2 (Euclidean) norm of a covariate of a `BEDFile` object `x`, i.e. sumabs2(x[:,covariate]).
 
@@ -79,23 +64,16 @@ Arguments:
 
 - `x` is the `BEDFile` object containing the compressed `n` x `p` design matrix..
 - `covariate` is the current nongenetic covariate (column) to use in calculations.
-- `means` is a vector of columns means of `x`.
-- `invstds` is a vector of column precisions of `x`.
 """
-function sumsq_covariate{T <: Float}(
-    x         :: BEDFile,
-    covariate :: Int,
-    means     :: DenseVector{T},
-    invstds   :: DenseVector{T}
-)
+function sumsq_covariate{T <: Float}(x::BEDFile{T}, covariate::Int)
     t = zero(T)
     s = zero(T)
-    m = means[x.p + covariate]
-    d = invstds[x.p + covariate]
+    m = x.means[x.geno.p + covariate]
+    d = x.precs[x.geno.p + covariate]
 
     # loop over all n individuals
-    @inbounds for case = 1:x.n
-        t = (x.x2[case,covariate] - m) * d
+    @inbounds @fastmath @simd for case = 1:x.geno.n
+        t = (x.covar.x[case,covariate] - m) * d
         s += t*t
     end
     return s
@@ -103,7 +81,7 @@ end
 
 
 """
-    sumsq(y, x, means, invstds)
+    sumsq(y, x)
 
 Compute the squared L2 norm of each column of a compressed matrix `x` and save it to a vector `y`.
 
@@ -111,28 +89,22 @@ Arguments:
 
 - `y` is the vector to fill with the squared norms.
 - `x` is the `BEDFile` object that contains the compressed `n` x `p` design matrix from which to draw the columns.
-- `means` is a vector of columns means of `x`.
-- `invstds` is a vector of column precisions of `x`.
 """
-function sumsq!{T <: Float}(
-    y       :: DenseVector{T},
-    x       :: BEDFile,
-    means   :: DenseVector{T},
-    invstds :: DenseVector{T}
-)
-    (x.p + x.p2) == length(y) || throw(DimensionMismatch("y must have one row for every column of x"))
-    @inbounds for snp = 1:x.p
-        y[snp] = sumsq_snp(x,snp,means,invstds)
+function sumsq!{T <: Float}(y::DenseVector{T}, x::BEDFile{T})
+    p = size(x,2)
+    p == length(y) || throw(DimensionMismatch("y has $(length(y)) rows, x has $p columns"))
+    @inbounds @fastmath @simd for snp = 1:x.geno.p
+        y[snp] = sumsq_snp(x,snp,x.means,x.precs) 
     end
-    @inbounds for covariate = 1:x.p2
-        y[x.p + covariate] = sumsq_covariate(x,covariate,means,invstds)
+    @inbounds @fastmath @simd for covariate = 1:x.covar.p
+        y[x.geno.p + covariate] = sumsq_covariate(x,covariate,x.means,x.precs)
     end
     return nothing
 end
 
 
 """
-    sumsq(x::BEDFile [, shared=true, pids=procs(), means, invstds])
+    sumsq(x::BEDFile [, shared=true, pids=procs()]) 
 
 Compute the squared L2 norm of each column of a compressed matrix `x`.
 
@@ -143,109 +115,57 @@ Arguments:
 Optional Arguments:
 - `shared` is a `Bool` indicating whether or not to output a `SharedArray`. Defaults to `true`.
 - `pids` is a vector of process IDs to which the output `SharedArray` will be distributed. Defaults to `procs()`. Has no effect when `shared = false`.
-- `means` is a vector of columns means of `x`.
-- `invstds` is a vector of column precisions of `x`.
 """
 function sumsq{T <: Float}(
-    x       :: BEDFile;
+    x       :: BEDFile{T};
     shared  :: Bool = true,
     pids    :: DenseVector{Int} = procs(),
-    means   :: DenseVector{T} = mean(T, x, shared=shared, pids=pids),
-    invstds :: DenseVector{T} = invstd(x, means, shared=shared, pids=pids)
 )
-    y = ifelse(shared, SharedArray(T, x.p + x.p2, init = S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, x.p + x.p2))
-    sumsq!(y,x,means,invstds)
+    p = size(x,2)
+    y = ifelse(shared, SharedArray(T, p, init = S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, p))
+    sumsq!(y,x)
     return y
 end
 
 
-"A parallel execution kernel for calculating the mean."
-function mean_chunk!{T <: Float}(q::SharedVector{T}, x::BEDFile, irange)
-#    @show irange  # display so we can see what's happening
-#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have typeT"))
+
+
+### functions for column means
+
+"""
+    mean_chunk(x::BEDFile, irange)
+
+A parallel execution kernel for calculating a subset of the column means of `x`.
+"""
+function mean_chunk!{T <: Float}(x::BEDFile{T}, irange::UnitRange{Int})
     for i in irange
-        q[i] = mean_col(T, x, i)
+        x.means[i] = mean_col(x, i)
     end
     return nothing
 end
 
-"A convenience wrapper for `mean_chunk!(T, q, x, irange)` that automatically chooses local indexes."
-mean_chunk!{T <: Float}(q::SharedVector{T}, x::BEDFile) = mean_chunk!(q, x, localindexes(q))
+"""
+    mean_chunk!(x::BEDFile)
+
+A convenience wrapper for `mean_chunk!(q, x, irange)` that automatically chooses local indexes for `irange`.
+"""
+mean_chunk!{T <: Float}(x::BEDFile{T}) = mean_chunk!(x, localindexes(x.means))
+
 
 """
-    mean(T::Type, x::BEDFile [, shared=true, pids=procs()])
-
-Compute the arithmetic means of the columns of a `BEDFile` object `x`.
-Note that this function will ignore `NaN`s, unlike the normal Julia function `Base.mean`.
-
-Arguments:
-
-- `T` is either `Float32` or `Float64`. If `T` is not supplied, then `mean()` defaults to `Float64`.
-- `x` is the BEDFile object to use for computing column means.
-
-Optional Arguments:
-
-- `shared` is a `Bool` to indicate whether or not to return a `SharedArray`. Defaults to `true`.
-- `pids` is a vector of process IDs over which to distribute the returned `SharedArray`. Defaults to `procs()`. Has no effect if `shared = false`.
+    mean_col(x::BEDFile, snp::Int)
+    
+Compute the mean of one `snp` column of a `BEDFile` object `x`. 
+Note that unlike the normal Julia `mean` function, `mean_col` ignores `NaN`s.
 """
-function mean(
-    T      :: Type,
-    x      :: BEDFile;
-    shared :: Bool = true,
-    pids   :: DenseVector{Int} = procs()
-)
-
-    # type T must be Float
-    T <: Float || throw(ArgumentError("Type T must be either Float32 or Float64"))
-
-    # initialize return vector
-    y = ifelse(shared, SharedArray(T, x.p + x.p2, init = S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, x.p + x.p2))
-
-
-#    # compute mean serially
-#    @inbounds for snp = 1:x.p
-#        y[snp] = mean_col(T,x,snp)
-#    end
-
-    # taken from advection example in Julia SharedArray documentation
-    # this parallel execution structure distributes calculation of mean to all collaborating processors
-    # each one computes an independent chunk of the mean vector based on localindexes()
-    @sync begin
-        for p in procs(y)
-            @async remotecall_wait(mean_chunk!, p, y, x)
-        end
-    end
-
-#    @inbounds for i = 1:x.p2
-#        @inbounds for j = 1:x.n
-#            y[x.p + i] += x.x2[j,i]
-#        end
-#        y[x.p + i] /= x.n
-#    end
-
-    y[(x.p+1):end] = vec(mean(x.x2,1))
-    return y
-end
-
-# for mean function, set default type to Float64
-mean(x::BEDFile; shared::Bool = true, pids::DenseVector{Int} = procs()) = mean(Float64, x, shared=shared, pids=pids)
-
-"Compute the mean of one `snp` column of a `BEDFile` object `x`. `T` is either `Float32` or `Float64` and defaults to the latter."
-function mean_col(
-    T   :: Type,
-    x   :: BEDFile,
-    snp :: Int
-)
-    # type T must be Float
-    T <: Float || throw(ArgumentError("Type T must be either Float32 or Float64"))
-
+function mean_col{T <: Float}(x::BEDFile{T}, snp::Int)
     s = zero(T) # accumulation variable, will eventually equal mean(x,col) for current col
     t = zero(T) # temp variable, output of interpret_genotype
     u = zero(T) # count the number of people
 
     # loop over all n individuals
-    @inbounds for case = 1:x.n
-        t = getindex(x,x.x,case,snp,x.blocksize)
+    @inbounds for case = 1:x.geno.n
+        t = x[case,snp]
 
         # ensure that we do not count NaNs
         if isfinite(t)
@@ -258,92 +178,50 @@ function mean_col(
     return s /= u
 end
 
-# for previous function, set default type to Float64
-mean_col(x::BEDFile, snp::Int) = mean_col(Float64, x, snp)
-
-
-"A parallel execution kernel for calculating the inverse standard deviation."
-function invstd_chunk!{T <: Float}(q::SharedVector{T}, x::BEDFile, m::SharedVector{T}, irange)
-#    @show irange  # display so we can see what's happening
-#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have typeT"))
-    @inbounds for i in irange
-        q[i] = invstd_col(x, i, m)
-    end
-    return nothing
-end
-
-"A convenience wrapper for `invstd_chunk!(T, q, x, m, irange)` that automatically chooses local indexes."
-invstd_chunk!{T <: Float}(q::SharedVector{T}, x::BEDFile, m::SharedVector{T}) = invstd_chunk!(q, x, m, localindexes(q))
-
 """
-    invstd(x, means [, shared=true, pids=procs()])
+    mean!(x::BEDFile)
 
-Compute the precision (inverse standard deviation) of the columns of a `BEDFile` object `x`.
-Note that this function will ignore `NaN`s, unlike the normal Julia function `Base.std`.
+Compute the arithmetic means of the columns of a `BEDFile` object `x`.
+Note that this function will ignore `NaN`s, unlike the normal Julia function `Base.mean`.
 
 Arguments:
 
-- `x` is the `BEDFile` object to use for computing column standard deviations.
-- `means` is a vector of column means for `x`, computed via `PLINK.mean(x)`.
-
-Optional Arguments:
-
-- `shared` is a `Bool` to indicate whether or not to return a `SharedArray`. Defaults to `true`.
-- `pids` is a vector of process IDs over which to distribute the returned `SharedArray`. Defaults to `procs()`. Has no effect if `shared = false`.
+- `x` is the BEDFile object to use for computing column means.
 """
-function invstd{T <: Float}(
-    x      :: BEDFile,
-    means  :: DenseVector{T};
-    shared :: Bool = true,
-    pids   :: DenseVector{Int} = procs()
-)
-
-    # check bounds
-    x.p + x.p2 == length(means) || throw(BoundsError("length(means) != size(x,2)"))
-
-    # initialize return vector
-    z = ifelse(shared, SharedArray(T, x.p + x.p2, init = S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, x.p + x.p2))
-
-#    # compute precision serially
-#    @inbounds  for snp = 1:x.p
-#        z[snp] = invstd_col(x, snp, means)
-#    end
-
+function Base.mean!{T <: Float}(x::BEDFile{T})
     # taken from advection example in Julia SharedArray documentation
     # this parallel execution structure distributes calculation of mean to all collaborating processors
     # each one computes an independent chunk of the mean vector based on localindexes()
     @sync begin
-        for p in procs(z)
-            @async remotecall_wait(invstd_chunk!, p, z, x, means)
+        for q in procs(x)
+            @async remotecall_wait(mean_chunk!, q, x)
         end
     end
-
-#    @inbounds for i = 1:x.p2
-#        @inbounds for j = 1:x.n
-#            z[x.p + i] += (x.x2[j,i] - means[x.p + i])^2
-#        end
-#        z[x.p + i] = sqrt((x.n - 1) / z[x.p + i])
-#    end
-    z[(x.p+1):end] = 1 ./ std(x.x2,1)
-    return z
+#    y[(x.geno.p+1):end] = vec(mean(x.covar.x,1))
+    @inbounds for i = 1:x.covar.p
+        x.means[x.geno.p + i] = mean(sub(x.covar.x, :, i))
+    end
+    return nothing
 end
 
 
-"Compute the precision of one `snp` column of a `BEDFile` object `x` with column `means` of type `T` (either Float32 or Float64)."
-function invstd_col{T <: Float}(
-    x     :: BEDFile,
-    snp   :: Int,
-    means :: DenseVector{T}
-)
 
-    s = zero(T)     # accumulation variable, will eventually equal mean(x,col) for current col
-    t = zero(T)     # temp variable, output of interpret_genotype
-    u = zero(T)     # count the number of people
-    m = means[snp]  # mean of current column
+### functions for precisions
+
+"""
+    prec_col(x::BEDFile, snp::Int)
+
+Compute the precision of one `snp` column of a `BEDFile` object `x`.
+"""
+function prec_col{T <: Float}(x::BEDFile{T}, snp::Int)
+    s = zero(T)      # accumulation variable, will eventually equal mean(x,col) for current col
+    t = zero(T)      # temp variable, output of interpret_genotype
+    u = zero(T)      # count the number of people
+    m = x.means[snp] # column mean 
 
     # loop over all n individuals
-    @inbounds for case = 1:x.n
-        t = getindex(x,x.x,case,snp,x.blocksize)
+    @inbounds for case = 1:x.geno.n
+        t = x[case,snp]
 
         # ensure that we do not count NaNs
         if isfinite(t)
@@ -352,14 +230,63 @@ function invstd_col{T <: Float}(
         end
     end
 
-    # now compute the std = sqrt(s) / (u - 1))
-    # save inv std in y
+    # now compute the std = sqrt(s / (u - 1)))
     s = ifelse(s <= zero(T), zero(T), sqrt((u - one(T)) / s))
     return s
 end
 
 """
-    dot(x,y,snp,means,invstds)
+    prec_chunk!(x::BEDFile, irange)
+
+A parallel execution kernel for calculating a subset of column precisions of `x`. 
+"""
+function prec_chunk!{T <: Float}(x::BEDFile{T}, irange::UnitRange{Int})
+    @inbounds for i in irange
+        x.precs[i] = prec_col(x, i)
+    end
+    return nothing
+end
+
+"""
+    prec_chunk!(x::BEDFile)
+
+A convenience wrapper for `prec_chunk!(x, irange)` that automatically chooses local indexes for `irange`.
+"""
+prec_chunk!{T <: Float}(x::BEDFile{T}) = prec_chunk!(x, localindexes(x.precs))
+
+
+"""
+    prec!(x::BEDFile)
+
+Compute the precision (inverse standard deviation) of the columns of a `BEDFile` object `x`.
+The precisions are stored in `x.precs`.
+Note that this function will ignore `NaN`s, unlike the normal Julia function `Base.std`.
+
+Arguments:
+
+- `x` is the `BEDFile` object to use for computing column standard deviations.
+"""
+function prec!{T <: Float}(x::BEDFile{T})
+    # taken from advection example in Julia SharedArray documentation
+    # this parallel execution structure distributes calculation of mean to all collaborating processors
+    # each one computes an independent chunk of the mean vector based on localindexes()
+    @sync begin
+        for q in procs(x)
+            @async remotecall_wait(prec_chunk!, q, x)
+        end
+    end
+    @inbounds for i = 1:x.covar.p
+        u = one(T) / std(sub(x.covar.x, :, i)) :: T
+        x.precs[x.geno.p + i] = u 
+    end
+    return nothing
+end
+
+
+
+
+"""
+    dot(x::BEDFile, y, snp)
 
 This function computes the dot product of a column from the `BEDFile` object `x` against a vector `y`.
 
@@ -368,103 +295,93 @@ Arguments:
 - `x` is the `BEDFile` object with the compressed `n` x `p` design matrix.
 - `y` is the vector on which to perform the dot product.
 - `snp` is the desired SNP (column) of the decompressed matrix to use for the dot product.
-- `means` is a vector of columns means of `x`.
-- `invstds` is a vector of column precisions of `x`.
+
+Optional Arguments:
+
+- `sy = sum(y)`. `sy` is used for (efficient) standardization purposes. Typically this is computed once in the execution of `x' * y`.
 """
-function dot{T <: Float}(
-    x       :: BEDFile,
+function Base.dot{T <: Float}(
+    x       :: BEDFile{T},
     y       :: DenseVector{T},
     snp     :: Int,
-    means   :: DenseVector{T},
-    invstds :: DenseVector{T};
     sy      :: T = sum(y)
 )
-    s = zero(T)      # accumulation variable, will eventually equal dot(y,z)
-    m = means[snp]   # mean of SNP predictor
-    d = invstds[snp] # 1/std of SNP predictor
+    s = zero(T)        # accumulation variable, will eventually equal dot(y,z)
+    m = x.means[snp]   # mean of SNP predictor
+    d = x.precs[snp]   # 1/std of SNP predictor
 
-    if snp <= x.p
+    if snp <= x.geno.p
 
         # loop over all individuals
-        @inbounds for case = 1:x.n
-            t = getindex(x,x.x,case,snp,x.blocksize)
+        @inbounds for case = 1:x.geno.n
+            t = x.geno[case,snp]
 
             # handle exceptions on t
-#            t = ifelse(isnan(t), zero(T), t - m)
-            t = isnan(t) ? zero(T) : t
+            u = t == ONE8 ? zero(T) : int2geno(x,t)
 
             # accumulate dot product
-            s += y[case] * t
+            s += y[case] * u
         end
     else
-        @inbounds for case = 1:x.n
-#            s += (x.x2[case,snp-x.p] - m)  * y[case]
-            s += x.x2[case,snp-x.p] * y[case]
+        @inbounds @fastmath @simd for case = 1:x.geno.n
+            s += x.covar[case,snp-x.geno.p] * y[case]
         end
     end
 
     # return the (normalized) dot product
-#    return s*d
     return (s - m*sy)*d
 end
 
 
 """
-    dot(x,y,snp,means,invstds,mask_n)
+    dot(x,y,snp,mask_n [, sy=sum(y), sminus=(sum(y[mask_n .== 0])])
 
 Can also be called with a bitmask vector `mask_n` containins `0`s and `1`s which removes masked rows of `x` and `y` from the dot product.
+An additional keyword argument `sminus` encodes the number of `y`s equal to `0`.
 """
-function dot{T <: Float}(
-    x       :: BEDFile,
+function Base.dot{T <: Float}(
+    x       :: BEDFile{T},
     y       :: DenseVector{T},
     snp     :: Int,
-    means   :: DenseVector{T},
-    invstds :: DenseVector{T},
-    mask_n  :: DenseVector{Int};
+    mask_n  :: DenseVector{Int},
     sy      :: T = sum(y),
-    sminus  :: T = sum(y[mask_n .== 0])
+    sminus  :: T = sum(y[mask_n .== 0]) # need this for standardization purposes
 )
-    s = zero(T)      # accumulation variable, will eventually equal dot(y,z)
-    m = means[snp]   # mean of SNP predictor
-    d = invstds[snp] # 1/std of SNP predictor
-   
-    # need accumulation variable for MASKED parts of y
-    sminus = zero(T)
+    s = zero(T)        # accumulation variable, will eventually equal dot(y,z)
+    m = x.means[snp]   # mean of SNP predictor
+    d = x.precs[snp]   # 1/std of SNP predictor
 
-    if snp <= x.p
+    if snp <= x.geno.p
 
         # loop over all individuals
-        @inbounds for case = 1:x.n
+        @inbounds @fastmath @simd for case = 1:x.geno.n
 
             # only accumulate if case is not masked
             if mask_n[case] == 1
-                t = getindex(x,x.x,case,snp,x.blocksize)
+                t = x.geno[case,snp]
 
                 # handle exceptions on t
-#                t = ifelse(isnan(t), zero(T), t - m)
-                t = isnan(t) ? zero(T) : t
+                u = t == ONE8 ? zero(T) : int2geno(x,t)
 
                 # accumulate dot product
-                s += y[case] * t
+                s += y[case] * u 
             end
         end
     else
-        @inbounds for case = 1:x.n
+        @inbounds @fastmath @simd for case = 1:x.geno.n
             if mask_n[case] == 1
-#                s += (x.x2[case,snp-x.p] - m)  * y[case]
-                s += x.x2[case,snp-x.p] * y[case]
+                s += x.covar.x[case,snp-x.geno.p] * y[case]
             end
         end
     end
 
     # return the (normalized) dot product
-#    return s*d
     return (s - (sy - sminus)*m)*d
 end
 
 
 """
-    dott(x,b,case,means,invstds)
+    dott(x::BEDFile, b, case, idx::BitArray{1})
 
 This function computes the dot product of a row from the `BEDFile` object `x` against a vector `b`.
 It computes `dot(x[case,:], b)` as `dot(x'[:,case], b)` to respect memory stride.
@@ -474,37 +391,33 @@ Arguments:
 - `x` is the `BEDFile` object with the compressed `n` x `p` design matrix.
 - `b` is the vector on which to perform the dot product.
 - `case` is the desired case (row) of the decompressed matrix to use for the dot product.
-- `means` is a vector of columns means of `x`.
-- `invstds` is a vector of column precisions of `x`.
 """
 function dott{T <: Float}(
-    x       :: BEDFile,
-    b       :: DenseVector{T},
-    case    :: Int,
-    indices :: BitArray{1},
-    means   :: DenseVector{T},
-    invstds :: DenseVector{T}
+    x    :: BEDFile,
+    b    :: DenseVector{T},
+    case :: Int,
+    idx  :: BitArray{1},
 )
     s = zero(T)  # accumulation variable, will eventually equal dot(y,z)
     t = zero(T)  # store interpreted genotype
-   @inbounds for snp = 1:x.p
+   @inbounds @fastmath @simd for snp = 1:x.geno.p
 
         # if current index of b is FALSE, then skip it since it does not contribute to Xb
-        if indices[snp]
+        if idx[snp]
 
             # decompress genotype, this time from transposed matrix
-            t = getindex(x,x.xt,snp,case,x.tblocksize)
+            t = getindex(x.geno,x.geno.xt,snp,case)
 
             # handle exceptions on t
-            t = isnan(t) ? zero(T) : (t - means[snp]) * invstds[snp]
+            u = t == ONE8 ? zero(T) : (int2geno(x,t) - x.means[snp]) * x.precs[snp]
            
             # accumulate dot product
-            s += b[snp] * t
+            s += b[snp] * u 
         end
     end
-   @inbounds for snp = (x.p+1):(x.p+x.p2)
-        if indices[snp]
-            s += b[snp] * (x.x2t[snp-x.p,case] - means[snp]) * invstds[snp]
+   @inbounds @fastmath @simd for snp = (x.geno.p+1):(x.geno.p+x.covar.p)
+        if idx[snp]
+            s += b[snp] * (x.covar.xt[snp-x.geno.p,case] - x.means[snp]) * x.precs[snp]
         end
     end
 
@@ -515,30 +428,29 @@ end
 
 
 """
-    xb!(Xb, x, b, indices, k, mask_n [, pids=procs(), means, invstds])
+    A_mul_B!(xb, x, b, indices, k, mask_n [, pids=procs()])
 
 Can also be called with a bitmask vector `mask_n` containins `0`s and `1`s which excludes or includes (respectively) elements of `x` and `b` from the dot product.
 """
-function xb!{T <: Float}(
-    Xb      :: DenseVector{T},
-    x       :: BEDFile,
-    b       :: DenseVector{T},
-    indices :: BitArray{1},
-    k       :: Int,
-    mask_n  :: DenseVector{Int};
-    pids    :: DenseVector{Int} = procs(),
-    means   :: DenseVector{T}   = mean(T,x, shared=true, pids=pids),
-    invstds :: DenseVector{T}   = invstd(x,means, shared=true, pids=pids),
-    n       :: Int              = length(Xb)
+function Base.A_mul_B!{T <: Float}(
+    xb     :: DenseVector{T},
+    x      :: BEDFile{T},
+    b      :: DenseVector{T},
+    idx    :: BitArray{1},
+    k      :: Int,
+    mask_n :: DenseVector{Int};
+    pids   :: DenseVector{Int} = procs(),
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
     k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
+    n = length(xb)
+    n == x.geno.n       || throw(ArgumentError("xb has $n rows but x has $(x.geno.n) rows"))
 
     # loop over the desired number of predictors
-    for case = 1:x.n
+    @inbounds for case = 1:n
         if mask_n[case] == 1
-            Xb[case] = dott(x, b, case, indices, means, invstds)
+            xb[case] = dott(x, b, case, idx)
         end
     end
 
@@ -547,44 +459,42 @@ end
 
 
 """
-    xb!(Xb, x, b, indices, k [, pids=procs(), means, invstds])
+    A_mul_B!(xb, x, b, indices, k [, pids=procs()])
 
 This function computes the operation `x*b` for the compressed `n` x `p` design matrix from a `BEDFile` object.
-`xb!()` respects memory stride for column-major arrays.
-It also assumes a sparse b, for which we have a `BitArray` index vector `indices` to select the nonzeroes.
+`A_mul_B!()` respects memory stride for column-major arrays by using a compressed transpose of genotypes and an uncompressed transpose of covariates.
+It also assumes a sparse b, for which we have a `BitArray` index vector `idx` to select the nonzeroes.
 
 Arguments:
 
-- `Xb` is the `n`-dimensional output vector.
+- `xb` is the `n`-dimensional output vector.
 - `x` is the `BEDFile` object for the compressed `n` x `p` design matrix.
 - `b` is the `p`-dimensional vector against which we multiply `x`.
-- `indices` is a `BitArray` that indexes the nonzeroes in `b`.
+- `idx` is a `BitArray` that indexes the nonzeroes in `b`.
 - `k` is the number of nonzeroes to use in computing `x*b`.
 
 Optional Arguments:
 
-- `pids` is a vector of process IDs over which to distribute the `SharedArray`s for `means` and `invstds`, if not supplied. Defaults to `procs()`.
-- `means` is a vector of column means for `x`.
-- `invstds` is a vector of reciprocal column standard deviations for `x`.
+- `pids` is a vector of process IDs over which to distribute the `SharedArray`s for `means` and `precs`, if not supplied. Defaults to `procs()`.
 """
-function xb!{T <: Float}(
-    Xb      :: DenseVector{T},
-    x       :: BEDFile,
-    b       :: DenseVector{T},
-    indices :: BitArray{1},
-    k       :: Int;
-    pids    :: DenseVector{Int} = procs(),
-    means   :: DenseVector{T}   = mean(T,x, shared=true, pids=pids),
-    invstds :: DenseVector{T}   = invstd(x,means, shared=true, pids=pids),
+function Base.A_mul_B!{T <: Float}(
+    xb   :: DenseVector{T},
+    x    :: BEDFile{T},
+    b    :: DenseVector{T},
+    idx  :: BitArray{1},
+    k    :: Int;
+    pids :: DenseVector{Int} = procs(),
 )
     # error checking
+    n = length(xb)
+    n == x.geno.n       || throw(ArgumentError("xb has $n rows but x has $(x.geno.n)"))
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
-    k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
-    pids == procs(Xb) == procs(b) == procs(x.xt) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xb! must be seen by same processes"))
+    k >= sum(indices)   || throw(ArgumentError("Must have k <= sum(indices) or X*b will not compute correctly"))
+    pids == procs(xb) == procs(b) == procs(x.geno.xt) || throw(ArgumentError("SharedArray arguments to A_mul_B! must be seen by same processes"))
 
     # loop over the desired number of predictors
-    for case = 1:x.n
-        Xb[case] = dott(x, b, case, indices, means, invstds)
+    @inbounds for case = 1:x.geno.n
+        xb[case] = dott(x, b, case, idx)
     end
 
     return nothing
@@ -593,47 +503,42 @@ end
 
 
 """
-    xb(x, b, indices, k, mask_n [, pids=procs(), means, invstds])
+    A_mul_B(x, b, idx, k, mask_n [, pids=procs()]) 
 
 Can also be called with a bitmask vector `mask_n` containins `0`s and `1`s which excludes or includes (respectively) elements of `x` and `b` from the dot product.
 """
-function xb{T <: Float}(
-    x       :: BEDFile,
-    b       :: Vector{T},
-    indices :: BitArray{1},
-    k       :: Int,
-    mask_n  :: DenseVector{Int};
-    means   :: Vector{T} = mean(T,x, shared=false),
-    invstds :: Vector{T} = invstd(x,means, shared=false)
+function A_mul_B{T <: Float}(
+    x      :: BEDFile{T},
+    b      :: SharedVector{T},
+    idx    :: BitArray{1},
+    k      :: Int,
+    mask_n :: DenseVector{Int};
+    pids   :: DenseVector{Int} = procs(),
 )
-    Xb = zeros(T,x.n)
-    xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds)
-    return Xb
+    xb = SharedArray(T, x.geno.n, init = S -> S[localindexes(S)] = zero(T), pids=pids)
+    A_mul_B!(xb, x, b, idx, k, mask_n, pids=pids)
+    return xb
 end
 
-
-function xb{T <: Float}(
-    x       :: BEDFile,
-    b       :: SharedVector{T},
-    indices :: BitArray{1},
-    k       :: Int,
-    mask_n  :: DenseVector{Int};
-    pids    :: DenseVector{Int} = procs(),
-    means   :: SharedVector{T}  = mean(T,x, shared=true, pids=pids),
-    invstds :: SharedVector{T}  = invstd(x,means, shared=true, pids=pids)
+function A_mul_B{T <: Float}(
+    x      :: BEDFile{T},
+    b      :: Vector{T},
+    idx    :: BitArray{1},
+    k      :: Int,
+    mask_n :: DenseVector{Int};
 )
-    Xb = SharedArray(T, x.n, init = S -> S[localindexes(S)] = zero(T), pids=pids)
-    xb!(Xb,x,b,indices,k,mask_n, means=means, invstds=invstds, pids=pids)
-    return Xb
+    xb = zeros(T, x.geno.n)
+    A_mul_B!(xb, x, b, idx, k, mask_n) 
+    return xb
 end
 
 
 
 """
-    xb(x, b, indices, k [, pids=procs(), means, invstds])
+    A_mul_B(x::BEDFile, b, idx, k [, pids=procs()])
 
 This function computes the operation `x*b` for the compressed `n` x `p` design matrix from a `BEDFile` object.
-`xb!()` respects memory stride for column-major arrays.
+`A_mul_B()` respects memory stride for column-major arrays.
 It also assumes a sparse `b`, for which we have a `BitArray` index vector `indices` to select the nonzeroes.
 The output type matches the type of `b`.
 
@@ -646,201 +551,189 @@ Arguments:
 
 Optional Arguments:
 
-- `pids` is a vector of process IDs over which to distribute the `SharedArray`s for `means` and `invstds`, if not supplied,
+- `pids` is a vector of process IDs over which to distribute the `SharedArray`s for `means` and `precs`, if not supplied,
    as well as the output vector. Defaults to `procs()`. Only available for `SharedArray` arguments to `b`.
-- `means` is a vector of column means for `x`.
-- `invstds` is a vector of reciprocal column standard deviations for `x`.
 """
-function xb{T <: Float}(
-    x       :: BEDFile,
-    b       :: Vector{T},
-    indices :: BitArray{1},
-    k       :: Int;
-    means   :: Vector{T} = mean(T,x, shared=false),
-    invstds :: Vector{T} = invstd(x,means, shared=false)
+function A_mul_B{T <: Float}(
+    x    :: BEDFile{T},
+    b    :: SharedVector{T},
+    idx  :: BitArray{1},
+    k    :: Int;
+    pids :: DenseVector{Int} = procs(),
 )
-    Xb = zeros(T,x.n)
-    xb!(Xb,x,b,indices,k, means=means, invstds=invstds)
+    xb = SharedArray(T, x.geno.n, init = S -> S[localindexes(S)] = zero(T), pids=pids)
+    A_mul_B!(xb, x, b, idx, k) 
+    return xb
+end
+
+function A_mul_B{T <: Float}(
+    x   :: BEDFile{T},
+    b   :: Vector{T},
+    idx :: BitArray{1},
+    k   :: Int;
+)
+    xb = zeros(T, x.geno.n)
+    A_mul_B!(xb, x, b, idx, k)
     return Xb
 end
 
+"""
+    At_mul_B_chunk!(xty, x::BEDFile, y, mask_n, irange)
 
-function xb{T <: Float}(
-    x       :: BEDFile,
-    b       :: SharedVector{T},
-    indices :: BitArray{1},
-    k       :: Int;
-    pids    :: DenseVector{Int} = procs(),
-    means   :: SharedVector{T}  = mean(T,x, shared=true, pids=pids),
-    invstds :: SharedVector{T}  = invstd(x,means, shared=true, pids=pids)
-)
-    Xb = SharedArray(T, x.n, init = S -> S[localindexes(S)] = zero(T), pids=pids)
-    xb!(Xb,x,b,indices,k, means=means, invstds=invstds)
-    return Xb
-end
-
-"A parallel execution kernel for calculating `x' * y`."
-function xty_chunk!{T <: Float}(
-    Xty     :: SharedVector{T},
-    x       :: BEDFile,
-    y       :: SharedVector{T},
-    means   :: SharedVector{T},
-    invstds :: SharedVector{T},
-    mask_n  :: DenseVector{Int},
-    irange  :: UnitRange{Int},
+A parallel execution kernel for calculating `x' * y` with a `BEDFile` object `x` that allows inclusion/exclusion of indices based on `mask_n`.
+"""
+function At_mul_B_chunk!{T <: Float}(
+    xty    :: SharedVector{T},
+    x      :: BEDFile{T},
+    y      :: SharedVector{T},
+    mask_n :: DenseVector{Int},
+    irange :: UnitRange{Int},
     sy      :: T = sum(y),
     sminus  :: T = sum(y[mask_n .== 0])
 )
-#    @show irange  # display so we can see what's happening
-#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have typeT"))
     @inbounds for i in irange
-        Xty[i] = dot(x, y, i, means, invstds, mask_n, sy=sy, sminus=sminus)
+        xty[i] = dot(x, y, i, mask_n, sy, sminus) 
     end
     return nothing
 end
 
-"A convenience wrapper for `invstd_chunk!(T, q, x, m, irange)` that automatically chooses local indexes."
-function xty_chunk!{T <: Float}(
-    Xty   :: SharedVector{T},
-    x     :: BEDFile,
-    y     :: SharedVector{T},
-    means :: SharedVector{T},
-    invstds :: SharedVector{T},
-    mask_n  :: DenseVector{Int},
+"""
+    At_mul_B_chunk!(xty, x::BEDFile, y, mask_n)
+
+A convenience wrapper for `At_mul_B_chunk!(xty, x, y, irange)` that automatically chooses local indexes for `irange` and excludes elements based on `mask_n`.
+"""
+function At_mul_B_chunk!{T <: Float}(
+    xty    :: SharedVector{T},
+    x      :: BEDFile{T},
+    y      :: SharedVector{T},
+    mask_n :: DenseVector{Int},
     sy      :: T = sum(y),
     sminus  :: T = sum(y[mask_n .== 0])
 )
-    xty_chunk!(Xty, x, y, means, invstds, mask_n, localindexes(Xty), sy, sminus)
+    At_mul_B_chunk!(xty, x, y, mask_n, localindexes(xty), sy, sminus)
     return nothing
 end
 
 
 """
-    xty!(Xty, x, y, mask_n, [, pids=procs(), means, invstds, p=size(x,2)])
+    At_mul_B!(xty, x::BEDFile, y, mask_n, [, pids=procs()]) 
 
-Can also be called with a bitmask vector `mask_n` containins `0`s and `1`s which excludes or includes (respectively) elements of `x` and `b` from the dot product.
+Can also be called with a bitmask vector `mask_n` containins `0`s and `1`s which excludes or includes elements of `x` and `y` from the dot product.
 """
-function xty!{T <: Float}(
-    Xty     :: SharedVector{T},
-    x       :: BEDFile,
+function Base.At_mul_B!{T <: Float}(
+    xty     :: SharedVector{T},
+    x       :: BEDFile{T},
     y       :: SharedVector{T},
     mask_n  :: DenseVector{Int};
     pids    :: DenseVector{Int} = procs(),
-    means   :: SharedVector{T}  = mean(T, x, shared=true, pids=pids),
-    invstds :: SharedVector{T}  = invstd(x, means, shared=true, pids=pids),
-    p       :: Int = size(x,2),
-    sy      :: T   = sum(y),
-    sminus  :: T   = sum(y[mask_n .== 0])
+    sy      :: T = sum(y),
+    sminus  :: T = sum(y[mask_n .== 0])
 )
     # error checking
-    p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
-    x.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
-    pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes"))
+    p = size(x,2)
+    p <= length(xty)      || throw(ArgumentError("Attempting to fill argument xty of length $(length(xty)) with $p elements!"))
+    x.geno.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.geno.n) of them!"))
+    pids == procs(xty) == procs(y) == procs(x.geno.x) || throw(ArgumentError("SharedArray arguments to At_mul_B! must be seen by same processes"))
 
-    # each processor will compute its own chunk of xty!
+    # each processor will compute its own chunk of x'*y
     @sync begin
-        for q in procs(Xty)
-            @async remotecall_wait(xty_chunk!, q, Xty, x, y, means, invstds, mask_n, sy, sminus)
+        for q in procs(xty)
+            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, mask_n, sy, sminus) 
         end
     end
     return nothing
 end
 
 
-function xty!{T <: Float}(
-    Xty     :: Vector{T},
-    x       :: BEDFile,
+function At_mul_B!{T <: Float}(
+    xty     :: Vector{T},
+    x       :: BEDFile{T},
     y       :: Vector{T},
-    mask_n  :: DenseVector{Int};
-    means   :: Vector{T} = mean(T,x, shared=false),
-    invstds :: Vector{T} = invstd(x,means, shared=false),
-    p       :: Int       = size(x,2),
-    sy      :: T         = sum(y),
-    sminus  :: T         = sum(y[mask_n .== 0])
+    mask_n  :: DenseVector{Int},
+    sy      :: T = sum(y),
+    sminus  :: T = sum(y[mask_n .== 0])
 )
     # error checking
-    size(x,2) <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
-    x.n == length(y)         || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
+    p = size(x,2)
+    p <= length(xty)      || throw(ArgumentError("Attempting to fill argument xty of length $(length(xty)) with $p elements!"))
+    x.geno.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.geno.n) of them!"))
 
     # loop over the desired number of predictors
     @inbounds for snp = 1:p
-        Xty[snp] = dot(x,y,snp,means,invstds,mask_n, sy=sy, sminus=sminus)
+        xty[snp] = dot(x, y, snp, mask_n, sy, sminus) 
     end
     return nothing
 end
 
 
-"A parallel execution kernel for calculating `x' * y`."
-function xty_chunk!{T <: Float}(
-    Xty     :: SharedVector{T},
-    x       :: BEDFile,
+"""
+    At_mul_B_chunk!(xty, x::BEDFile, y, irange)
+
+A parallel execution kernel for calculating `x' * y` with a `BEDFile` object `x`.
+"""
+function At_mul_B_chunk!{T <: Float}(
+    xty     :: SharedVector{T},
+    x       :: BEDFile{T},
     y       :: SharedVector{T},
-    means   :: SharedVector{T},
-    invstds :: SharedVector{T},
     irange  :: UnitRange{Int},
-    sy      :: T
+    sy      :: T = sum(y),
 )
-#    @show irange  # display so we can see what's happening
-#    typeof(q[1]) == T || throw(ArgumentError("Argument q must have typeT"))
     @inbounds for i in irange
-        Xty[i] = dot(x, y, i, means, invstds, sy=sy)
+        xty[i] = dot(x, y, i, sy)
     end
-    return nothing
-end
-
-"A convenience wrapper for `xty_chunk!(T, q, x, m, irange)` that automatically chooses local indexes."
-function xty_chunk!{T <: Float}(
-    Xty     :: SharedVector{T},
-    x       :: BEDFile,
-    y       :: SharedVector{T},
-    means   :: SharedVector{T},
-    invstds :: SharedVector{T},
-    sy      :: T
-)
-    xty_chunk!(Xty, x, y, means, invstds, localindexes(Xty), sy)
     return nothing
 end
 
 """
-    xty!(Xty, x, y, [, pids=procs(), means, invstds, p=size(x,2)])
+    At_mul_B_chunk!(xty, x::BEDFile, y)
+
+A convenience wrapper for `At_mul_B_chunk!(xty, x, y, irange)` that automatically chooses local indexes.
+"""
+function At_mul_B_chunk!{T <: Float}(
+    xty     :: SharedVector{T},
+    x       :: BEDFile{T},
+    y       :: SharedVector{T},
+    sy      :: T = sum(y)
+)
+    At_mul_B_chunk!(xty, x, y, localindexes(xty), sy)
+    return nothing
+end
+
+"""
+    At_mul_B!(xty, x, y, [, pids=procs()]) 
 
 This function computes the operation `x'*y` for the compressed `n` x `p` design matrix from a `BEDFile` object.
-`xty!()` enforces a uniform type (`SharedArray` v. `Array` and `Float64` v. `Float32`) across all arrays.
-It also requires `SharedArray` arguments to be seen by the same processes, i.e. `procs(Xty) == procs(y) == procs(x.x)`.
+`At_mul_B!` enforces a uniform type (`SharedArray` v. `Array` and `Float64` v. `Float32`) across all arrays.
+It also requires `SharedArray` arguments to be seen by the same processes, i.e. `procs(xty) == procs(y) == procs(x)`.
 
 Arguments:
 
-- 'Xty' is the p-dimensional output vector.
+- 'xty' is the p-dimensional output vector.
 - `x` is the `BEDFile` object for the compressed `n` x `p` design matrix.
 - `y` is the `n`-dimensional vector against which we multiply `x`.
 
 Optional Arguments:
 
-- `pids` is a vector of process IDs over which to distribute the `SharedArray`s for `means` and `invstds`, if not supplied,
-   as well as the output vector. Defaults to `procs()`. Only available for `SharedArray` arguments to `Xty` and `y`.
-- `means` is a vector of column means for `x`.
-- `invstds` is a vector of reciprocal column standard deviations for `x`.
-- `p` is the number of predictors. Defaults to `size(x,2)`.
+- `pids` is a vector of process IDs over which to distribute the `SharedArray`s for `means` and `precs`, if not supplied,
+   as well as the output vector. Defaults to `procs()`. Only available for `SharedArray` arguments to `xty` and `y`.
 """
-function xty!{T <: Float}(
-    Xty     :: SharedVector{T},
-    x       :: BEDFile,
+function Base.At_mul_B!{T <: Float}(
+    xty     :: SharedVector{T},
+    x       :: BEDFile{T},
     y       :: SharedVector{T};
     pids    :: DenseVector{Int} = procs(),
-    means   :: SharedVector{T}  = mean(T,x, shared=true, pids=pids),
-    invstds :: SharedVector{T}  = invstd(x,means, shared=true, pids=pids),
-    p       :: Int = size(x,2),
-    sy      :: T   = sum(y),
+    sy      :: T = sum(y)
 )
     # error checking
-    p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $p elements!"))
-    x.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
-    pids == procs(Xty) == procs(y) == procs(x.x) == procs(means) == procs(invstds) || throw(ArgumentError("SharedArray arguments to xty! must be seen by same processes"))
+    p = size(x,2)
+    p <= length(xty) || throw(ArgumentError("Attempting to fill argument xty of length $(length(xty)) with $p elements!"))
+    x.geno.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
+    pids == procs(xty) == procs(y) == procs(x) || throw(ArgumentError("SharedArray arguments to At_mul_B! must be seen by same processes"))
 
-    # each processor will compute its own chunk of xty!
+    # each processor will compute its own chunk of x'*y 
     @sync begin
-        for q in procs(Xty)
-            @async remotecall_wait(xty_chunk!, q, Xty, x, y, means, invstds, sy)
+        for q in procs(xty)
+            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, sy)
         end
     end
 
@@ -849,22 +742,20 @@ end
 
 
 
-function xty!{T <: Float}(
-    Xty     :: Vector{T},
-    x       :: BEDFile,
+function Base.At_mul_B!{T <: Float}(
+    xty     :: Vector{T},
+    x       :: BEDFile{T},
     y       :: Vector{T};
-    means   :: Vector{T} = mean(T,x, shared=false),
-    invstds :: Vector{T} = invstd(x,means, shared=false),
-    p       :: Int = size(x,2),
     sy      :: T   = sum(y),
 )
     # error checking
-    x.p <= length(Xty) || throw(ArgumentError("Attempting to fill argument Xty of length $(length(Xty)) with $(x.p) elements!"))
-    x.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
+    p = size(x,2)
+    p <= length(xty) || throw(ArgumentError("Attempting to fill argument xty of length $(length(xty)) with $p elements!"))
+    x.geno.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.geno.n) of them!"))
 
     # loop over the desired number of predictors
     @inbounds for snp = 1:p
-        Xty[snp] = dot(x,y,snp,means,invstds, sy=sy)
+        xty[snp] = dot(x, y, snp, sy)
     end
     return nothing
 end
@@ -872,7 +763,7 @@ end
 
 
 """
-    xty(x, y, mask_n [, pids=procs(), means, invstds, p=size(x,2)])
+    At_mul_B(x, y, mask_n [, pids=procs()])
 
 This function computes `x'*y` for the compressed `n` x `p` design matrix from a `BEDFile` object.
 It uses a bitmask `mask_n` to exclude certain rows of `x` from the calculations.
@@ -885,35 +776,32 @@ Arguments:
 
 Optional Arguments:
 
-- `pids` is a vector of process IDs over which to distribute the `SharedArray`s for `means` and `invstds`, if not supplied,
+- `pids` is a vector of process IDs over which to distribute the `SharedArray`s for `means` and `precs`, if not supplied,
    as well as the output vector. Defaults to `procs()`. Only available for `SharedArray` arguments to `b`.
-- `means` is a vector of column means for `x`.
-- `invstds` is a vector of reciprocal column standard deviations for `x`.
 """
-function xty{T <: Float}(
-    x       :: BEDFile,
+function Base.At_mul_B{T <: Float}(
+    x       :: BEDFile{T},
     y       :: SharedVector{T},
     mask_n  :: DenseVector{Int};
     pids    :: DenseVector{Int} = procs(),
-    means   :: SharedVector{T}  = mean(T,x, shared=true, pids=pids),
-    invstds :: SharedVector{T}  = invstd(x,means, shared=true, pids=pids)
+    sy      :: T = sum(y)
 )
-    p = x.p + x.p2
-    Xty = SharedArray(T, p, init = S -> S[localindexes(S)] = zero(T), pids=pids)
-    xty!(Xty,x,y,mask_n, means=means, invstds=invstds, p=p, pids=pids)
-    return Xty
+    p = size(x,2) 
+    xty = SharedArray(T, p, init = S -> S[localindexes(S)] = zero(T), pids=pids)
+    At_mul_B!(xty, x, y, mask_n, pids=pids, sy=sy)
+    return xty
 end
 
 
-function xty{T <: Float}(
-    x       :: BEDFile,
+function Base.At_mul_B{T <: Float}(
+    x       :: BEDFile{T},
     y       :: Vector{T},
-    mask_n  :: DenseVector{Int};
-    means   :: Vector{T} = mean(T,x, shared=false),
-    invstds :: Vector{T} = invstd(x,means, shared=false)
+    mask_n  :: DenseVector{Int}; 
+    sy      :: T = sum(y),
+    sminus  :: T = sum(y[mask_n .== 0])
 )
-    p = x.p + x.p2
-    Xty = zeros(T, p)
-    xty!(Xty,x,y,mask_n, means=means, invstds=invstds, p=p)
-    return Xty
+    p = size(x,2) 
+    xty = zeros(T, p)
+    At_mul_B!(xty, x, y, mask_n, sy, sminus) 
+    return xty
 end
