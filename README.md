@@ -49,10 +49,12 @@ The `CovariateMatrix` parametrix type does the same, but it houses nongenetic co
         xt :: V  
     end
 
-The fields `x`, `p2`, and `xt` only matter if the analysis includes nongenetic covariates.
+The fields `x`, `p`, and `xt` only matter if the analysis includes nongenetic covariates.
 One example is regression analysis; users should put the grand mean (vector of ones) in a `CovariateMatrix`. 
 
-`BEDFile` objects make heavy use of Julia `SharedArray`s to distribute computations across multiple CPU cores. A wise practice is to maintain a vector of process ids (e.g. `pids = procs()`). Several functions in PLINK.jl can read `pids` as an optional argument.
+`BEDFile` objects make heavy use of Julia `SharedArray`s to distribute computations across multiple CPU cores.
+A wise practice is to maintain a common vector of process ids (e.g. `pids = procs()`).
+Several functions in PLINK.jl can read `pids` as an optional argument.
 
 There are many `BEDFile` constructors. Most users will use either of
 
@@ -63,13 +65,28 @@ depending on whether or not covariates are included.
 
 ## Standardizing
 
-PLINK.jl coerces the user to use standardized copies of `x`.
-Since a standardized `x` cannot be stored in PLINK format, PLINK.jl calculates means and precisoins (inverse standard deviations) and stores them in the fields `means` and `precs`:
+To facilitate linear algebra and regression analysis, PLINK.jl defaults to using standardized copies of `x`.
+Since a standardized `x` cannot be stored in PLINK format, PLINK.jl offers facilities to calculates means and precisions (inverse standard deviations).
+These quantities are stored in the fields `means` and `precs`:
 
     mean!(x) # calculate means and store in x.means
     prec!(x) # calculate precisions and store in x.precs
 
 These calculations are not necessarily fast, so it is recommended that users precompute and cache the column means and precisions of a genotype matrix. 
+If the means and precisions are stored to file, then a `BEDFile` with means and precisions can be constructed directly with
+
+   x = BEDFile("PATH_TO_BED.bed", "PATH_TO_TBED.bed", "PATH_TO_COVARIATES.txt", "PATH_TO_MEANS.bin", "PATH_TO_PRECS.bin") 
+
+Observe that the means and precisions must be stored in _binary_ format.
+This constraint arises from the nature of the `SharedArray` constructor,
+which uses a memory map.
+If means and precisions are stored in a delimited file, then the user can load them and fill the corresponding fields manually:
+
+    m = readdlm("PATH_TO_MEANS.txt")
+    d = readdlm("PATH_TO_PRECS.txt")
+    copy!(x.means, m)
+    copy!(x.precs, d)
+
 **IMPORTANT**: the onus is on the user to ensure that the means and precisions are reasonable.
 For the regression analysis case in particular,
 the user must set elements of `x.means` and `x.precs` to `0.0` and `1.0`, respectively.
@@ -93,8 +110,7 @@ It is possible to recover the floating point representation of `x`:
     Y = zeros(x.n, size(x,2))
     decompress_genotypes(Y, x, pids=pids)
 
-Unless it is absoluately necessary, or unless the data dimensions are not too large, use of `decompress_genotypes!` in this way is strongly discouraged since the memory demands can quickly breach computer memory limits. 
-
+Unless it is absoluately necessary, or unless the data dimensions are not too large, use of `decompress_genotypes!` in this way is strongly discouraged since the memory demands can balloon quickly.
 
 ## Linear algebra
 
