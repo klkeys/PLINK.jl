@@ -45,7 +45,7 @@ function sumsq_snp{T <: Float}(x::BEDFile{T}, snp::Int)
     d = x.precs[snp]
 
     # loop over all n individuals
-    @inbounds @fastmath @simd for case = 1:x.geno.n
+    @inbounds for case = 1:x.geno.n
         t = x[case,snp]
         t = isnan(t) ? zero(T) : (t - m)*d
         s += t*t
@@ -72,7 +72,7 @@ function sumsq_covariate{T <: Float}(x::BEDFile{T}, covariate::Int)
     d = x.precs[x.geno.p + covariate]
 
     # loop over all n individuals
-    @inbounds @fastmath @simd for case = 1:x.geno.n
+    @inbounds for case = 1:x.geno.n
         t = (x.covar.x[case,covariate] - m) * d
         s += t*t
     end
@@ -93,10 +93,10 @@ Arguments:
 function sumsq!{T <: Float}(y::DenseVector{T}, x::BEDFile{T})
     p = size(x,2)
     p == length(y) || throw(DimensionMismatch("y has $(length(y)) rows, x has $p columns"))
-    @inbounds @fastmath @simd for snp = 1:x.geno.p
+    @inbounds for snp = 1:x.geno.p
         y[snp] = sumsq_snp(x,snp,x.means,x.precs) 
     end
-    @inbounds @fastmath @simd for covariate = 1:x.covar.p
+    @inbounds for covariate = 1:x.covar.p
         y[x.geno.p + covariate] = sumsq_covariate(x,covariate,x.means,x.precs)
     end
     return nothing
@@ -323,7 +323,7 @@ function Base.dot{T <: Float}(
             s += y[case] * u
         end
     else
-        @inbounds @fastmath @simd for case = 1:x.geno.n
+        @inbounds for case = 1:x.geno.n
             s += x.covar[case,snp-x.geno.p] * y[case]
         end
     end
@@ -354,7 +354,7 @@ function Base.dot{T <: Float}(
     if snp <= x.geno.p
 
         # loop over all individuals
-        @inbounds @fastmath @simd for case = 1:x.geno.n
+        @inbounds for case = 1:x.geno.n
 
             # only accumulate if case is not masked
             if mask_n[case] == 1
@@ -368,7 +368,7 @@ function Base.dot{T <: Float}(
             end
         end
     else
-        @inbounds @fastmath @simd for case = 1:x.geno.n
+        @inbounds for case = 1:x.geno.n
             if mask_n[case] == 1
                 s += x.covar.x[case,snp-x.geno.p] * y[case]
             end
@@ -391,22 +391,22 @@ Arguments:
 - `x` is the `BEDFile` object with the compressed `n` x `p` design matrix.
 - `b` is the vector on which to perform the dot product.
 - `case` is the desired case (row) of the decompressed matrix to use for the dot product.
+- `idx` is a `BitArray` that indexes `b`.
 """
 function dott{T <: Float}(
-    x    :: BEDFile,
+    x    :: BEDFile{T},
     b    :: DenseVector{T},
     case :: Int,
-    idx  :: BitArray{1},
+    idx  :: BitArray{1}
 )
-    s = zero(T)  # accumulation variable, will eventually equal dot(y,z)
-    t = zero(T)  # store interpreted genotype
-   @inbounds @fastmath @simd for snp = 1:x.geno.p
-
+    s = zero(T)     # accumulation variable, will eventually equal dot(y,z)
+    @inbounds for snp = 1:x.geno.p
+        
         # if current index of b is FALSE, then skip it since it does not contribute to Xb
         if idx[snp]
 
             # decompress genotype, this time from transposed matrix
-            t = getindex(x.geno,x.geno.xt,snp,case)
+            t = getindex_t(x.geno,x.geno.xt,snp,case)
 
             # handle exceptions on t
             u = t == ONE8 ? zero(T) : (int2geno(x,t) - x.means[snp]) * x.precs[snp]
@@ -415,9 +415,9 @@ function dott{T <: Float}(
             s += b[snp] * u 
         end
     end
-   @inbounds @fastmath @simd for snp = (x.geno.p+1):(x.geno.p+x.covar.p)
-        if idx[snp]
-            s += b[snp] * (x.covar.xt[snp-x.geno.p,case] - x.means[snp]) * x.precs[snp]
+    @inbounds for covar = (x.geno.p+1):size(x,2)
+        if idx[covar]
+            s += b[covar] * (x.covar.xt[covar-x.geno.p,case] - x.means[covar]) * x.precs[covar]
         end
     end
 
@@ -428,7 +428,7 @@ end
 
 
 """
-    A_mul_B!(xb, x, b, indices, k, mask_n [, pids=procs()])
+    A_mul_B!(xb, x, b, idx, k, mask_n [, pids=procs()])
 
 Can also be called with a bitmask vector `mask_n` containins `0`s and `1`s which excludes or includes (respectively) elements of `x` and `b` from the dot product.
 """
@@ -443,7 +443,7 @@ function Base.A_mul_B!{T <: Float}(
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
-    k >= sum(indices)   || throw(ArgumentError("Must have k >= sum(indices) or X*b will not compute correctly"))
+    k >= sum(idx)       || throw(ArgumentError("Must have k >= sum(idx) or X*b will not compute correctly"))
     n = length(xb)
     n == x.geno.n       || throw(ArgumentError("xb has $n rows but x has $(x.geno.n) rows"))
 
@@ -459,7 +459,7 @@ end
 
 
 """
-    A_mul_B!(xb, x, b, indices, k [, pids=procs()])
+    A_mul_B!(xb, x, b, idx, k [, pids=procs()])
 
 This function computes the operation `x*b` for the compressed `n` x `p` design matrix from a `BEDFile` object.
 `A_mul_B!()` respects memory stride for column-major arrays by using a compressed transpose of genotypes and an uncompressed transpose of covariates.
@@ -489,7 +489,7 @@ function Base.A_mul_B!{T <: Float}(
     n = length(xb)
     n == x.geno.n       || throw(ArgumentError("xb has $n rows but x has $(x.geno.n)"))
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
-    k >= sum(indices)   || throw(ArgumentError("Must have k <= sum(indices) or X*b will not compute correctly"))
+    k >= sum(idx)       || throw(ArgumentError("Must have k <= sum(idx) or X*b will not compute correctly"))
     pids == procs(xb) == procs(b) == procs(x.geno.xt) || throw(ArgumentError("SharedArray arguments to A_mul_B! must be seen by same processes"))
 
     # loop over the desired number of predictors
@@ -539,14 +539,14 @@ end
 
 This function computes the operation `x*b` for the compressed `n` x `p` design matrix from a `BEDFile` object.
 `A_mul_B()` respects memory stride for column-major arrays.
-It also assumes a sparse `b`, for which we have a `BitArray` index vector `indices` to select the nonzeroes.
+It also assumes a sparse `b`, for which we have a `BitArray` index vector `idx` to select the nonzeroes.
 The output type matches the type of `b`.
 
 Arguments:
 
 - `x` is the `BEDFile` object for the compressed `n` x `p` design matrix.
 - `b` is the `p`-dimensional vector against which we multiply `x`.
-- `indices` is a `BitArray` that indexes the nonzeroes in `b`.
+- `idx` is a `BitArray` that indexes the nonzeroes in `b`.
 - `k` is the number of nonzeroes to use in computing `x*b`.
 
 Optional Arguments:

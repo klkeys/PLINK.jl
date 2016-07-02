@@ -8,7 +8,6 @@ immutable CovariateMatrix{T <: Float, V <: SharedMatrix} <: AbstractArray{T, 2}
 end
 
 function CovariateMatrix{T <: Float}(
-#    x  :: SharedVecOrMat,
     x  :: SharedMatrix{T},
     p  :: Int,
     xt :: SharedMatrix{T}

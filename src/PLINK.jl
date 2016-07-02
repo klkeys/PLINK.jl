@@ -13,8 +13,10 @@ import Base.length
 import Base.ndims
 import Base.display
 import Base.convert
+import Base.A_mul_B!
+import Base.At_mul_B!
 
-export BEDFile
+export BEDFile, PlinkGPUVariables
 export decompress_genotypes!, decompress_genotypes
 export A_mul_B!, A_mul_B
 export At_mul_B!, At_mul_B
@@ -47,8 +49,7 @@ This lookup table encodes the following PLINK format for genotypes:
 - 10 is missing
 - 11 is homozygous for allele 2
 
-The idea is to map 00 to -1, 11 to 1, and 01 to 0.
-Since we cannot use 01, we will map it to NaN.
+We will represent missing (NA) with NaN.
 Further note that the bytes are read from right to left.
 That is, if we label each of the 8 position as A to H, we would label backwards:
 

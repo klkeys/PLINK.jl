@@ -7,9 +7,9 @@ function decomp_genocol!{T <: Float}(
     d     :: T;
     quiet :: Bool = true
 )
-    @fastmath @inbounds @simd for case = 1:x.geno.n
+    @inbounds for case = 1:x.geno.n
         t = x.geno[case,snp]
-        Y[case,col] = t == TWO8 ? zero(T) : (int2geno(x,t) - m)*d 
+        Y[case,col] = t == ONE8 ? zero(T) : (int2geno(x,t) - m)*d 
         quiet || println("Y[$case,$col] = ", Y[case,col])
     end
     return nothing
@@ -25,10 +25,10 @@ function decomp_genocol!{T <: Float}(
     d      :: T;
     quiet  :: Bool = true
 )
-    @fastmath @inbounds @simd for case = 1:x.geno.n
+    @inbounds for case = 1:x.geno.n
         if mask_n[case] == 1
             t = x[case,snp]
-            Y[case,col] = t == TWO8 ? zero(T) : (int2geno(x,t) - m)*d 
+            Y[case,col] = t == ONE8 ? zero(T) : (int2geno(x,t) - m)*d 
             quiet || println("Y[$case,$col] = ", Y[case,col])
         else
             Y[case,col] = zero(T)
@@ -46,7 +46,7 @@ function decomp_covarcol!{T <: Float}(
     d     :: T;
     quiet :: Bool = true
 )
-    @fastmath @inbounds @simd for case = 1:x.geno.n
+    @inbounds for case = 1:x.geno.n
         Y[case,col] = (x.covar.x[case,(covar-x.geno.p)] - m) * d
         quiet || println("Y[$case,$col] = ", Y[case,col])
     end
@@ -62,7 +62,7 @@ function decomp_covarcol!{T <: Float}(
     d      :: T;
     quiet  :: Bool = true
 )
-    @fastmath @inbounds @simd for case = 1:x.geno.n
+    @inbounds for case = 1:x.geno.n
         if mask_n[case] == 1
             t = x[case,snp]
             Y[case,col] = (x.covar.x[case,(covar-x.geno.p)] - m) * d
@@ -111,28 +111,26 @@ end
 
 
 """
-    decompress_genotypes!(Y, x, indices, means, invstds)
+    decompress_genotypes!(Y, x, idx, means, invstds)
 
-When `Y` is a matrix and `indices` is a `BitArray` or `Int` array that indexes the columns of `x`, then `decompress_genotypes!()` decompresses only a subset of `x`.
+When `Y` is a matrix and `idx` is a `BitArray` or `Int` array that indexes the columns of `x`, then `decompress_genotypes!()` decompresses only a subset of `x`.
 """
 function decompress_genotypes!{T <: Float}(
-    Y       :: DenseMatrix{T},
-    x       :: BEDFile{T},
-    indices :: BitArray{1};
-    pids    :: DenseVector{Int} = procs(),
-#    means   :: DenseVector{T}   = mean(x, shared=true, pids=pids),
-#    invstds :: DenseVector{T}   = invstd(x,means, shared=true, pids=pids),
-    quiet   :: Bool             = true
+    Y     :: DenseMatrix{T},
+    x     :: BEDFile{T},
+    idx   :: BitArray{1};
+    pids  :: DenseVector{Int} = procs(),
+    quiet :: Bool             = true
 )
 
     # get dimensions of matrix to fill
-    (n,p) = size(Y)
+    (n,p)  = size(Y)
     xn, xp = size(x)
 
     # ensure dimension compatibility
-    n == xn            || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
-    p <= xp            || throw(DimensionMismatch("Y has more columns than x"))
-    sum(indices) <= xp || throw(DimensionMismatch("Vector 'indices' indexes more columns than are available in Y"))
+    n == xn        || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
+    p <= xp        || throw(DimensionMismatch("Y has more columns than x"))
+    sum(idx) <= xp || throw(DimensionMismatch("Vector 'idx' indexes more columns than are available in Y"))
 
     # counter to ensure that we do not attempt to overfill Y
     col = 0
@@ -141,22 +139,20 @@ function decompress_genotypes!{T <: Float}(
     @inbounds for snp = 1:xp
 
         # use this column?
-        if indices[snp]
+        if idx[snp]
 
             # add to counter
             col += 1
             quiet || println("filling current column $current_col with snp $snp")
 
             # extract column mean, precision 
-#            m = means[snp]
-#            d = invstds[snp]
-            m = x.means[j]
-            s = x.precs[j]
+            m = x.means[snp]
+            s = x.precs[snp]
 
             if snp <= x.geno.p
-                decomp_genocol!(Y, x, col, snp, m, d, quiet=quiet)
+                decomp_genocol!(Y, x, col, snp, m, s, quiet=quiet)
             else
-                decomp_covarcol!(Y, x, col, snp, m, d, quiet=quiet)
+                decomp_covarcol!(Y, x, col, snp, m, s, quiet=quiet)
             end
 
             # quit when Y is filled
@@ -169,13 +165,11 @@ end
 
 
 function decompress_genotypes!{T <: Float}(
-    Y       :: DenseMatrix{T},
-    x       :: BEDFile{T},
-    indices :: DenseVector{Int};
-    pids    :: DenseVector{Int} = procs(),
-#    means   :: DenseVector{T}   = mean(x, shared=true, pids=pids),
-#    invstds :: DenseVector{T}   = invstd(x,means, shared=true, pids=pids),
-    quiet   :: Bool             = true
+    Y     :: DenseMatrix{T},
+    x     :: BEDFile{T},
+    idx   :: DenseVector{Int};
+    pids  :: DenseVector{Int} = procs(),
+    quiet :: Bool             = true
 )
 
     # get dimensions of matrix to fill
@@ -183,28 +177,26 @@ function decompress_genotypes!{T <: Float}(
     xn,xp = size(x)
 
     # ensure dimension compatibility
-    n == xn              || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
-    p <= xp              || throw(DimensionMismatch("Y has more columns than x"))
-    length(indices) <= p || throw(DimensionMismatch("Vector 'indices' indexes more columns than are available in Y"))
+    n == xn          || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
+    p <= xp          || throw(DimensionMismatch("Y has more columns than x"))
+    length(idx) <= p || throw(DimensionMismatch("Vector 'idx' indexes more columns than are available in Y"))
 
     # counter to ensure that we do not attempt to overfill Y
-    current_col = 0
+    col = 0
 
-    @inbounds for snp in indices
+    @inbounds for snp in idx
 
         # add to counter
         col += 1
         quiet || println("filling current column $current_col with snp $snp")
 
         # extract column mean, precision
-#        m = means[snp]
-#        d = invstds[snp]
-        m = x.means[j]
-        s = x.precs[j]
+        m = x.means[snp]
+        s = x.precs[snp]
         if snp <= x.geno.p
-            decomp_genocol!(Y, x, col, snp, m, d, quiet=quiet)
+            decomp_genocol!(Y, x, col, snp, m, s, quiet=quiet)
         else
-            decomp_covarcol!(Y, x, col, snp, m, d, quiet=quiet)
+            decomp_covarcol!(Y, x, col, snp, m, s, quiet=quiet)
         end
 
         # quit when Y is filled
@@ -216,19 +208,17 @@ end
 
 
 """
-    decompress_genotypes!(Y, x, indices, mask_n [,pids=procs(), means=mean(Float64,x,shared=true,pids=pids), invstds=(x,means,shared=true,pids=pids)])
+    decompress_genotypes!(Y, x, idx, mask_n [,pids=procs(), quiet=true]) 
 
-If called with a vector `mask_n` of `0`s and `1`s, then `decompress_genotypes!()` will decompress the columns of `x` indexed by `indices` into `Y` while masking the rows indexed by `mask_n`.
+If called with a vector `mask_n` of `0`s and `1`s, then `decompress_genotypes!()` will decompress the columns of `x` indexed by `idx` into `Y` while masking the rows indexed by `mask_n`.
 """
 function decompress_genotypes!{T <: Float}(
-    Y       :: DenseMatrix{T},
-    x       :: BEDFile{T},
-    indices :: BitArray{1},
-    mask_n  :: DenseVector{Int};
-    pids    :: DenseVector{Int} = procs(),
-#    means   :: DenseVector{T}   = mean(x, shared=true, pids=pids),
-#    invstds :: DenseVector{T}   = invstd(x,means, shared=true, pids=pids),
-    quiet   :: Bool             = true
+    Y      :: DenseMatrix{T},
+    x      :: BEDFile{T},
+    idx    :: BitArray{1},
+    mask_n :: DenseVector{Int};
+    pids   :: DenseVector{Int} = procs(),
+    quiet  :: Bool             = true
 )
 
     # get dimensions of matrix to fill
@@ -239,7 +229,7 @@ function decompress_genotypes!{T <: Float}(
     n <= xn             || throw(DimensionMismatch("column dimension of of Y exceeds column dimension of uncompressed x"))
     n == length(mask_n) || throw(DimensionMismatch("bitmask mask_n indexes different number of columns than column dimension of Y"))
     p <= xp             || throw(DimensionMismatch("Y has more columns than x"))
-    sum(indices) <= xp  || throw(DimensionMismatch("Vector 'indices' indexes more columns than are available in Y"))
+    sum(idx) <= xp      || throw(DimensionMismatch("Vector 'idx' indexes more columns than are available in Y"))
 
     # counter to ensure that we do not attempt to overfill Y
     col = 0
@@ -247,21 +237,19 @@ function decompress_genotypes!{T <: Float}(
     @inbounds for snp = 1:xp
 
         # use this column?
-        if indices[snp]
+        if idx[snp]
 
             # add to counter
             col += 1
             quiet || println("filling current column $col with snp $snp")
 
             # extract column mean, precision 
-#            m = means[snp]
-#            d = invstds[snp]
-            m = x.means[j]
-            s = x.precs[j]
+            m = x.means[snp]
+            s = x.precs[snp]
             if snp <= x.p
-                decomp_genocol!(Y, x, mask_n, col, snp, m, d, quiet=quiet)
+                decomp_genocol!(Y, x, mask_n, col, snp, m, s, quiet=quiet)
             else
-                decomp_covarcol!(Y, x, mask_n, col, snp, m, d, quiet=quiet)
+                decomp_covarcol!(Y, x, mask_n, col, snp, m, s, quiet=quiet)
             end
 
             # quit when Y is filled
@@ -284,25 +272,19 @@ Arguments:
 - `y` is the matrix to fill with (standardized) dosages.
 - `x` is the BEDfile object that contains the compressed `n` x `p` design matrix.
 - `snp` is the current SNP (predictor) to extract.
-- `means` is an array of column means for `x`.
-- `invstds` is an array of column precisions for `x`.
 """
 function decompress_genotypes!{T <: Float}(
     y       :: DenseVector{T},
     x       :: BEDFile{T},
     snp     :: Int,
-#    means   :: DenseVector{T},
-#    invstds :: DenseVector{T};
     quiet   :: Bool = true
 )
-#    m = means[snp]
-#    d = invstds[snp]
-    m = x.means[j]
-    s = x.precs[j]
+    m = x.means[snp]
+    s = x.precs[snp]
     if snp <= x.p
-        decomp_genocol!(Y, x, col, snp, m, d, quiet=quiet)
+        decomp_genocol!(Y, x, col, snp, m, s, quiet=quiet)
     else
-        decomp_covarcol!(Y, x, col, snp, m, d, quiet=quiet)
+        decomp_covarcol!(Y, x, col, snp, m, s, quiet=quiet)
     end
     return nothing
 end

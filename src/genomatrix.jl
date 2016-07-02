@@ -96,6 +96,20 @@ function getindex(
     return genotype 
 end
 
+# internal routine to index the transposed matrix
+# used for dott()
+function getindex_t(
+    X   :: GenoMatrix,
+    x   :: DenseVector{Int8},
+    row :: Int,
+    col :: Int
+)
+    genotype_block = x[(col-1)*X.tblocksize + ((row - 1) >>> 2) + 1]
+    k = 2*((row-1) & 3)
+    genotype = (genotype_block >>> k) & THREE8
+    return genotype 
+end
+
 # default indexing is to column-major matrix
 # can use x.xt to index the transpose
 getindex(x::GenoMatrix, row::Int, col::Int) = getindex(x, x.x, row, col)
