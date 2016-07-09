@@ -1,10 +1,11 @@
 function compress{T <: Float}(
-    x :: DenseMatrix{T}
+    x :: DenseMatrix{T},
+    z :: BEDFile{T}
 )
-    # get size of matrix
-    (n,p) = size(x)
+    # get size of **genotype** matrix
+    (n,p) = size(z.geno)
 
-    # get designated blocksize
+    # get designated blocksizes
     blocksize = ((n-1) >> 2) + 1
     tblocksize = ((p-1) >> 2) + 1
 
@@ -19,7 +20,7 @@ function compress{T <: Float}(
 
     # counters for bookkeeping
     ngeno = 0
-    ybyte = 4
+    ybyte = 4   # start after magic numbers!
 
     # loop over all columns in x
     for j = 1:p
@@ -27,22 +28,29 @@ function compress{T <: Float}(
         # each column starts with fresh counter
         # ybyte is offset by first 3 bookkeeping bytes plus previous columns
         ngeno = 0
-        ybyte = 4 + (j-1)*blocksize
+        yidx = 4 + (j-1)*blocksize
+        ybyte = ZERO8
 
         # loop over cases
         for i = 1:n
             ngeno += 1
-#            println("ngeno =ngeno, ybyte =ybyte, i =i, j =j")
+#            println("ngeno = $ngeno, ybyte = $ybyte, i = $i, j = $j, x[i,j] = $(x[i,j])")
             if T == Float64
-                y[ybyte] = y[ybyte] << 2 + bin64[x[i,j]]
+#                y[yidx] = y[yidx] << 2 + bin64[x[i,j]]
+#                ybyte = ybyte << 2 + bin64[x[i,j]]
+                ybyte = bin64[x[i,j]] << 2*(ngeno-1) | ybyte
+#                println("ybyte = $ybyte")
             else
-                y[ybyte] = y[ybyte] << 2 + bin32[x[i,j]]
+                y[yidx] = y[yidx] << 2 + bin32[x[i,j]]
             end
 
             # reset whenver we reach 4 genotypes
-            if ngeno >= 4
-                ybyte += 1
+            # OR when we reach end of a column
+            if ngeno >= 4 || i == n
+                y[yidx] = ybyte
+                yidx += 1
                 ngeno = 0
+                ybyte = ZERO8
             end
         end
     end
