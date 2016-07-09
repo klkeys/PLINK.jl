@@ -41,7 +41,8 @@ function compress{T <: Float}(
                 ybyte = bin64[x[i,j]] << 2*(ngeno-1) | ybyte
 #                println("ybyte = $ybyte")
             else
-                y[yidx] = y[yidx] << 2 + bin32[x[i,j]]
+#                y[yidx] = y[yidx] << 2 + bin32[x[i,j]]
+                ybyte = bin32[x[i,j]] << 2*(ngeno-1) | ybyte
             end
 
             # reset whenver we reach 4 genotypes
