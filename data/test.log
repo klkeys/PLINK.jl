@@ -9,37 +9,37 @@
 @----------------------------------------------------------@
 
 Web-based version check ( --noweb to skip )
-Recent cached web-check found... OK, v1.07 is current
+Connecting to web...  OK, v1.07 is current
 
 +++ PLINK 1.9 is now available! See above website for details +++ 
 
-Writing this text to log file [ test_binary.log ]
-Analysis started: Tue May 12 10:07:48 2015
+Writing this text to log file [ test.log ]
+Analysis started: Sat Jul  9 10:19:32 2016
 
 Options in effect:
-	--file test_binary
+	--file test
 	--make-bed
-	--out test_binary
+	--out test
 
-3 (of 3) markers to be included from [ test_binary.map ]
-6 individuals read from [ test_binary.ped ] 
-3 individuals with nonmissing phenotypes
+2 (of 2) markers to be included from [ test.map ]
+6 individuals read from [ test.ped ] 
+6 individuals with nonmissing phenotypes
 Assuming a disease phenotype (1=unaff, 2=aff, 0=miss)
 Missing phenotype value is also -9
-3 cases, 0 controls and 3 missing
+3 cases, 3 controls and 0 missing
 6 males, 0 females, and 0 of unspecified sex
-Before frequency and genotyping pruning, there are 3 SNPs
-4 founders and 2 non-founders found
-Total genotyping rate in remaining individuals is 0.777778
+Before frequency and genotyping pruning, there are 2 SNPs
+6 founders and 0 non-founders found
+Total genotyping rate in remaining individuals is 1
 0 SNPs failed missingness test ( GENO > 1 )
 0 SNPs failed frequency test ( MAF < 0 )
-After frequency and genotyping pruning, there are 3 SNPs
-After filtering, 3 cases, 0 controls and 3 missing
+After frequency and genotyping pruning, there are 2 SNPs
+After filtering, 3 cases, 3 controls and 0 missing
 After filtering, 6 males, 0 females, and 0 of unspecified sex
-Writing pedigree information to [ test_binary.fam ] 
-Writing map (extended format) information to [ test_binary.bim ] 
-Writing genotype bitfile to [ test_binary.bed ] 
+Writing pedigree information to [ test.fam ] 
+Writing map (extended format) information to [ test.bim ] 
+Writing genotype bitfile to [ test.bed ] 
 Using (default) SNP-major mode
 
-Analysis finished: Tue May 12 10:07:48 2015
+Analysis finished: Sat Jul  9 10:19:32 2016
 
