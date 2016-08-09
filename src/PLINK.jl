@@ -15,11 +15,13 @@ import Base.display
 import Base.convert
 import Base.A_mul_B!
 import Base.At_mul_B!
+#import Base.*
 
 export BEDFile, PlinkGPUVariables
 export decompress_genotypes!, decompress_genotypes
 export A_mul_B!, A_mul_B
 export At_mul_B!, At_mul_B
+#export *
 export sumsq!, sumsq
 export mean!, prec!
 export maf

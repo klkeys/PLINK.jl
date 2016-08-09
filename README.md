@@ -75,7 +75,7 @@ These quantities are stored in the fields `means` and `precs`:
 These calculations are not necessarily fast, so it is recommended that users precompute and cache the column means and precisions of a genotype matrix. 
 If the means and precisions are stored to file, then a `BEDFile` with means and precisions can be constructed directly with
 
-   x = BEDFile("PATH_TO_BED.bed", "PATH_TO_TBED.bed", "PATH_TO_COVARIATES.txt", "PATH_TO_MEANS.bin", "PATH_TO_PRECS.bin") 
+    x = BEDFile("PATH_TO_BED.bed", "PATH_TO_TBED.bed", "PATH_TO_COVARIATES.txt", "PATH_TO_MEANS.bin", "PATH_TO_PRECS.bin") 
 
 Observe that the means and precisions must be stored in _binary_ format.
 This constraint arises from the nature of the `SharedArray` constructor,

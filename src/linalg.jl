@@ -577,6 +577,11 @@ function A_mul_B{T <: Float}(
     return Xb
 end
 
+# overload matrix-vector multiplication x*b with a BEDFile
+#Base.*{T <: Float}(x :: BEDFile{T}, b :: DenseVector{T}) = A_mul_B(x, b, b .!= zero(T), countnz(b), pids=procs(x))
+
+
+
 """
     At_mul_B_chunk!(xty, x::BEDFile, y, mask_n, irange)
 
