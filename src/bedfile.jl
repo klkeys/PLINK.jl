@@ -48,15 +48,15 @@ end
 
 function BEDFile(
     T          :: Type,
-    filename   :: AbstractString,
-    tfilename  :: AbstractString,
+    filename   :: ASCIIString,
+    tfilename  :: ASCIIString,
     n          :: Int,
     p          :: Int,
     blocksize  :: Int,
     tblocksize :: Int,
-    x2filename :: AbstractString,
-    mfilename  :: AbstractString,
-    pfilename  :: AbstractString;
+    x2filename :: ASCIIString,
+    mfilename  :: ASCIIString,
+    pfilename  :: ASCIIString;
     pids       :: DenseVector{Int} = procs(),
     header     :: Bool = false
 )
@@ -69,15 +69,15 @@ end
 
 # set default type for previous constructor to Float64
 function BEDFile(
-    filename   :: AbstractString,
-    tfilename  :: AbstractString, 
+    filename   :: ASCIIString,
+    tfilename  :: ASCIIString, 
     n          :: Int, 
     p          :: Int, 
     blocksize  :: Int, 
     tblocksize :: Int, 
-    x2filename :: AbstractString,
-    mfilename  :: AbstractString,
-    pfilename  :: AbstractString;
+    x2filename :: ASCIIString,
+    mfilename  :: ASCIIString,
+    pfilename  :: ASCIIString;
     pids       :: DenseVector{Int} = procs(), 
     header     :: Bool = false
 )
@@ -87,13 +87,13 @@ end
 # constructor without blocksizes
 function BEDFile(
     T          :: Type,
-    filename   :: AbstractString,
-    tfilename  :: AbstractString,
+    filename   :: ASCIIString,
+    tfilename  :: ASCIIString,
     n          :: Int,
     p          :: Int,
-    x2filename :: AbstractString,
-    mfilename  :: AbstractString,
-    pfilename  :: AbstractString;
+    x2filename :: ASCIIString,
+    mfilename  :: ASCIIString,
+    pfilename  :: ASCIIString;
     pids       :: DenseVector{Int} = procs(),
     header     :: Bool = false
 )
@@ -104,13 +104,13 @@ end
 
 # set default type for previous constructor to Float64
 function BEDFile(
-    filename   :: AbstractString,
-    tfilename  :: AbstractString,
+    filename   :: ASCIIString,
+    tfilename  :: ASCIIString,
     n          :: Int, 
     p          :: Int, 
-    x2filename :: AbstractString,
-    mfilename  :: AbstractString,
-    pfilename  :: AbstractString;
+    x2filename :: ASCIIString,
+    mfilename  :: ASCIIString,
+    pfilename  :: ASCIIString;
     pids       :: DenseVector{Int} = procs(), 
     header     :: Bool = false
 )
@@ -122,8 +122,8 @@ end
 # dummy means, precisions
 function BEDFile(
     T         :: Type, 
-    filename  :: AbstractString, 
-    tfilename :: AbstractString; 
+    filename  :: ASCIIString, 
+    tfilename :: ASCIIString; 
     pids      :: DenseVector{Int} = procs()
 )
 
@@ -146,8 +146,8 @@ end
 
 # set default type for previous constructor to Float64
 function BEDFile(
-    filename  :: AbstractString,
-    tfilename :: AbstractString; 
+    filename  :: ASCIIString,
+    tfilename :: ASCIIString; 
     pids      :: DenseVector{Int} = procs()
 )
     BEDFile(Float64, filename, tfilename, pids=pids)
@@ -158,9 +158,9 @@ end
 # dummy means, precisions
 function BEDFile(
     T          :: Type, 
-    filename   :: AbstractString, 
-    tfilename  :: AbstractString, 
-    x2filename :: AbstractString; 
+    filename   :: ASCIIString, 
+    tfilename  :: ASCIIString, 
+    x2filename :: ASCIIString; 
     pids       :: DenseVector{Int} = procs(),
     header     :: Bool = false, 
 )
@@ -181,9 +181,9 @@ end
 
 # set default type for previous constructor to Float64
 function BEDFile(
-    filename   :: AbstractString, 
-    tfilename  :: AbstractString, 
-    x2filename :: AbstractString; 
+    filename   :: ASCIIString, 
+    tfilename  :: ASCIIString, 
+    x2filename :: ASCIIString; 
     header     :: Bool = false, 
     pids       :: DenseVector{Int} = procs()
 )
@@ -193,11 +193,11 @@ end
 # constructor to load all data from file
 function BEDFile(
     T          :: Type, 
-    filename   :: AbstractString, 
-    tfilename  :: AbstractString, 
-    x2filename :: AbstractString,
-    mfilename  :: AbstractString,
-    pfilename  :: AbstractString; 
+    filename   :: ASCIIString, 
+    tfilename  :: ASCIIString, 
+    x2filename :: ASCIIString,
+    mfilename  :: ASCIIString,
+    pfilename  :: ASCIIString; 
     pids       :: DenseVector{Int} = procs(),
     header     :: Bool = false, 
 )
@@ -218,17 +218,85 @@ end
 
 # set default type for previous constructor to Float64
 function BEDFile(
-    filename   :: AbstractString, 
-    tfilename  :: AbstractString, 
-    x2filename :: AbstractString,
-    mfilename  :: AbstractString,
-    pfilename  :: AbstractString; 
+    filename   :: ASCIIString, 
+    tfilename  :: ASCIIString, 
+    x2filename :: ASCIIString,
+    mfilename  :: ASCIIString,
+    pfilename  :: ASCIIString; 
     pids       :: DenseVector{Int} = procs(),
     header     :: Bool = false, 
 )
     BEDFile(Float64, filename, tfilename, x2filename, mfilename, pfilename, header=header, pids=pids)
 end
 
+# ambitious construtor that uses the location of the BED file and the covariates
+# unlike other constructors, it will attempt to compute the correct means and precisions
+function BEDFile(
+    T          :: Type,
+    filename   :: ASCIIString,
+    x2filename :: ASCIIString;
+    pids       :: DenseVector{Int} = procs(),
+    header     :: Bool = false
+)
+    # find n from the corresponding FAM file
+    famfile = filename[1:(endof(filename)-3)] * "fam"
+    n       = countlines(famfile)
+
+    # find p from the corresponding BIM file
+    bimfile = filename[1:(endof(filename)-3)] * "bim"
+    p       = countlines(bimfile)
+
+    # use Desktop as a temporary directory for transpose
+    # here we call our PLINK utility to transpose the file
+    tmppath = expanduser("~/Desktop/tbed_$(myid()).bed")
+    plinkpath = expanduser("~/.julia/v0.4/PLINK/utils/./plink_data")
+    run(`$plinkpath $filename $p $n --transpose $tmppath`)
+
+    # create a BEDFile object 
+    x = BEDFile(T, filename, tmppath, x2filename, pids=pids, header=header)
+
+    # calculate means and precisions
+    mean!(x)
+    prec!(x)
+
+    # covariate mean/precision must be 0.0/1.0 
+    x.means[end] = zero(T)
+    x.precs[end] = one(T)
+
+    # delete temporary files before returning
+    rm(tmppath)
+
+    return x
+end
+
+# default type for previous constructor is Float64
+BEDFile(filename::ASCIIString, x2filename::ASCIIString; pids::DenseVector{Int} = procs(), header::Bool = false) = BEDFile(Float64, filename, x2filename, pids=pids, header=header) 
+
+# another ambitious construtor that only uses the location of the BED file
+# unlike previous constructors, the default covariate is a vector of ones
+# also unlike other constructors, it will attempt to compute the correct means and precisions
+function BEDFile(
+    T        :: Type,
+    filename :: ASCIIString;
+    pids     :: DenseVector{Int} = procs()
+)
+    # make a temporary covariate file
+    tmpcovar = expanduser("~/Desktop/x.txt")
+    famfile  = filename[1:(endof(filename)-3)] * "fam"
+    n        = countlines(famfile)
+    writedlm(tmpcovar, ones(n))
+
+    # create a BEDFile object 
+    x = BEDFile(T, filename, tmpcovar, pids=pids, header=false)
+
+    # delete temporary files before returning
+    rm(tmpcovar)
+
+    return x
+end
+
+# default type for previous constructor is Float64
+BEDFile(filename::ASCIIString; pids::DenseVector{Int} = procs()) = BEDFile(Float64, filename, pids=pids) 
 
 function display(x::BEDFile)
     println("A BEDFile object with the following features:")
