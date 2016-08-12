@@ -83,8 +83,14 @@ Thus, the map in PLINK.jl is slightly different:
 """
 const genofloat = [0.0, NaN, 1.0, 2.0]
 
+# dictionaries used in compression to convert floating point numbers to Int8 numbers
 const bin32  = Dict{Float32, Int8}(0.0f0 => ZERO8, NaN32 => ONE8, 1.0f0 => TWO8, 2.0f0 => THREE8)
 const bin64  = Dict{Float64, Int8}(0.0 => ZERO8, NaN => ONE8, 1.0 => TWO8, 2.0 => THREE8)
+
+# preloaded GPU kernels
+# these are merely long strongs that contain the code in the file
+const gpucode64 = open(readall("./kernels/iht_kernels64.cl"))
+const gpucode32 = open(readall("./kernels/iht_kernels32.cl"))
 
 include("covariate.jl")
 include("genomatrix.jl")

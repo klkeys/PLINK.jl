@@ -473,7 +473,7 @@ int main(int argc,char * argv[]){
     if(strcmp(argv[arg],"--transpose")==0){
       enable_transpose = true;
       transpose_file=argv[++arg];
-      cerr<<"Invoking transpose with outfile "<<transpose_file<<"\n";
+      //cerr<<"Invoking transpose with outfile "<<transpose_file<<"\n";
     }else if(strcmp(argv[arg],"--copy")==0){
       enable_copy = true;
       copy_file=argv[++arg];
