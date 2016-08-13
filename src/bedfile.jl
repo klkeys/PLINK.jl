@@ -119,7 +119,7 @@ end
 
 
 # constructor when only genotype data are available
-# dummy means, precisions
+# adds single covariate of zeroes and computes means, precisions
 function BEDFile(
     T         :: Type, 
     filename  :: ASCIIString, 
@@ -141,7 +141,15 @@ function BEDFile(
     m = SharedArray(T, (p,), init = S -> localindexes(S) = zero(T), pids=pids) 
     d = SharedArray(T, (p,), init = S -> localindexes(S) = one(T),  pids=pids) 
 
-    return BEDFile(x,y,m,d)
+    # construct BEDFile
+    z = BEDFile(x,y,m,d)
+
+    # compute means, precisions
+    # since we have a single covariate of all `a`, set the final mean/prec to 0/1
+    mean!(z); z.means[end] = zero(T)
+    prec!(z); z.precs[end] = one(T)
+
+    return z 
 end
 
 # set default type for previous constructor to Float64
@@ -155,7 +163,7 @@ end
 
 
 # constructor for when genotype, covariate information are available
-# dummy means, precisions
+# computes means, precisions
 function BEDFile(
     T          :: Type, 
     filename   :: ASCIIString, 
@@ -176,7 +184,15 @@ function BEDFile(
     m = SharedArray(T, (x.p + y.p,), init = S -> localindexes(S) = zero(T), pids=pids) 
     d = SharedArray(T, (x.p + y.p,), init = S -> localindexes(S) = one(T),  pids=pids) 
 
-    return BEDFile(x,y,m,d) 
+    # construct BEDFile
+    z = BEDFile(x,y,m,d) 
+
+    # compute means, precisions
+    # since we have a single covariate of all `a`, set the final mean/prec to 0/1
+    mean!(z); z.means[end] = zero(T)
+    prec!(z); z.precs[end] = one(T)
+
+    return z
 end
 
 # set default type for previous constructor to Float64
@@ -230,7 +246,7 @@ function BEDFile(
 end
 
 # ambitious construtor that uses the location of the BED file and the covariates
-# unlike other constructors, it will attempt to compute the correct means and precisions
+# computes means, precisions
 function BEDFile(
     T          :: Type,
     filename   :: ASCIIString,
@@ -281,7 +297,7 @@ function BEDFile(
     pids     :: DenseVector{Int} = procs()
 )
     # make a temporary covariate file
-    tmpcovar = expanduser("~/Desktop/x.txt")
+    tmpcovar = expanduser("~/Desktop/x_$(myid()).txt")
     famfile  = filename[1:(endof(filename)-3)] * "fam"
     n        = countlines(famfile)
     writedlm(tmpcovar, ones(n))

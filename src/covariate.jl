@@ -22,7 +22,11 @@ function CovariateMatrix(
     header   :: Bool = false
 )
     # first load data
-    x_temp = readdlm(filename, T, header=header)
+    if header
+        x_temp, h = readdlm(filename, T, header=true)
+    else
+        x_temp = readdlm(filename, T, header=header)
+    end
 
     # make SharedArray container for x_temp
     x = SharedArray(T, size(x_temp), init = S -> localindexes(S) = zero(T), pids=pids)

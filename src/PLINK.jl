@@ -27,6 +27,7 @@ export mean!, prec!
 export maf
 export getindex
 export compress
+export read_plink_data
 
 # constants used for decompression purposes
 const ZERO8  = convert(Int8,0)
