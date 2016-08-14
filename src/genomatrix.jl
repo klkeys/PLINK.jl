@@ -6,39 +6,63 @@ immutable GenoMatrix
     p          :: Int
     blocksize  :: Int
     tblocksize :: Int
+    snpids     :: Vector{UTF8String}
 
-    GenoMatrix(x,xt,n,p,blocksize,tblocksize) = new(x,xt,n,p,blocksize,tblocksize)
+    GenoMatrix(x,xt,n,p,blocksize,tblocksize,snpids) = new(x,xt,n,p,blocksize,tblocksize,snpids)
 end
 
-# additional constructors
+# additional constructors, all of which will infer snpids field from BIM file
+# consequently the snpids field never appers as an argument
+# first constructor uses all remaining fields of GenoMatrix as arguments
 function GenoMatrix(
-    filename   :: AbstractString,
-    tfilename  :: AbstractString,
+    filename   :: ASCIIString,
+    tfilename  :: ASCIIString,
     n          :: Int,
     p          :: Int,
     blocksize  :: Int,
     tblocksize :: Int;
-    pids       :: DenseVector{Int} = procs()
+    pids       :: DenseVector{Int} = procs(),
 )
-    return GenoMatrix(read_bedfile(filename, pids=pids),read_bedfile(tfilename, transpose = true, pids=pids),n,p,blocksize,tblocksize)
+    # find SNP ids from the corresponding BIM file
+    # first create filepath to BIM file
+    bimfile = filename[1:(endof(filename)-3)] * "bim"
+
+    # specify column element types of BIM file 
+    eltypes = [Int, UTF8String, Int, Int, UTF8String, UTF8String]
+
+    # load BIM
+    df = readtable(bimfile, header = false, separator = '\t', eltypes = eltypes)
+
+    # second column of BIM file contains the SNP ids
+    snpids = convert(Vector{UTF8String}, df[:x2]) :: Vector{UTF8String} 
+    
+    x = GenoMatrix(
+        read_bedfile(filename, pids=pids), 
+        read_bedfile(tfilename, transpose = true, pids=pids),
+        n, p, blocksize, tblocksize, snpids)
+    
+    return x
 end
 
+# another constructor for when blocksizes are not precomputed
 function GenoMatrix(
-    filename   :: AbstractString,
-    tfilename  :: AbstractString,
-    n          :: Int,
-    p          :: Int;
-    pids       :: DenseVector{Int} = procs()
+    filename  :: ASCIIString,
+    tfilename :: ASCIIString,
+    n         :: Int,
+    p         :: Int;
+    pids      :: DenseVector{Int} = procs()
 )
     blocksize  = ( (n-1) >>> 2) + 1
     tblocksize = ( (p-1) >>> 2) + 1
-    return GenoMatrix(filename, tfilename, n, p, blocksize, tblocksize)
+    return GenoMatrix(filename, tfilename, n, p, blocksize, tblocksize, pids=pids) :: PLINK.GenoMatrix
 end
 
+
+# constructor to load entirely from file
 function GenoMatrix(
-    filename   :: AbstractString,
-    tfilename  :: AbstractString;
-    pids       :: DenseVector{Int} = procs()
+    filename  :: ASCIIString,
+    tfilename :: ASCIIString;
+    pids      :: DenseVector{Int} = procs()
 )
     # find n from the corresponding FAM file
     famfile = filename[1:(endof(filename)-3)] * "fam"
@@ -53,8 +77,9 @@ function GenoMatrix(
     tblocksize = ((p-1) >>> 2) + 1
 
     # can now create GenoMatrix
-    return GenoMatrix(filename, tfilename, n, p, blocksize, tblocksize, pids=pids)
+    return GenoMatrix(filename, tfilename, n, p, blocksize, tblocksize, pids=pids) :: PLINK.GenoMatrix
 end
+
 
 # subroutines
 Base.size(x::GenoMatrix) = (x.n, x.p)
@@ -139,7 +164,7 @@ Output:
   at the end of each block.
 """
 function read_bedfile(
-    filename  :: AbstractString; 
+    filename  :: ASCIIString; 
     transpose :: Bool = false, 
     pids      :: DenseVector{Int} = procs()
 )
@@ -168,7 +193,7 @@ function read_bedfile(
 
     # return the genotypes
 #   return x[4:end]
-    return x
+    return x :: SharedVector{Int8}
 end
 
 function display(x::GenoMatrix) 

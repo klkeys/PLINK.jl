@@ -1,54 +1,58 @@
 # container for nongenetic covariates
-immutable CovariateMatrix{T <: Float, V <: SharedMatrix} <: AbstractArray{T, 2}
-    x  :: V 
+immutable CovariateMatrix{T <: Float} <: AbstractArray{T, 2}
+    x  :: SharedMatrix{T} 
     p  :: Int
-    xt :: V 
+    xt :: SharedMatrix{T} 
+    h  :: Vector{UTF8String} # header 
 
-    CovariateMatrix(x::SharedMatrix{T}, p, xt::SharedMatrix{T}) = new(x,p,xt)
+#    CovariateMatrix(x::SharedMatrix{T}, p::Int, xt::SharedMatrix{T}, h::UTF8String) = new(x,p,xt,h)
 end
 
 function CovariateMatrix{T <: Float}(
     x  :: SharedMatrix{T},
     p  :: Int,
-    xt :: SharedMatrix{T}
+    xt :: SharedMatrix{T},
+    h  :: Vector{UTF8String}
 )
-    CovariateMatrix{T, typeof(x)}(x, p, xt)
+    CovariateMatrix{eltype(x)}(x, p, xt, h) :: CovariateMatrix{eltype(x)}
 end
 
 function CovariateMatrix(
     T        :: Type, 
-    filename :: AbstractString;
+    filename :: ASCIIString;
     pids     :: DenseVector{Int} = procs(),
     header   :: Bool = false
 )
     # first load data
     if header
-        x_temp, h = readdlm(filename, T, header=true)
+        x_temp, h = readdlm(filename, T, header=true) :: Matrix{T}, Matrix{AbstractString}
+        h = convert(Vector{UTF8String}, h) :: Vector{UTF8String}
     else
-        x_temp = readdlm(filename, T, header=header)
+        x_temp = readdlm(filename, T, header=false) :: Matrix{T}
+        h = convert(Vector{UTF8String}, ["V" * "$i" for i = 1:size(x_temp,2)]) :: Vector{UTF8String}
     end
 
     # make SharedArray container for x_temp
-    x = SharedArray(T, size(x_temp), init = S -> localindexes(S) = zero(T), pids=pids)
+    x = SharedArray(T, size(x_temp), init = S -> localindexes(S) = zero(T), pids=pids) :: SharedMatrix{eltype(x_temp)}
     copy!(x, x_temp)
 
     # do same for x'
-    xt = SharedArray(T, reverse(size(x_temp)), init = S -> localindexes(S) = zero(T), pids=pids)
+    xt = SharedArray(T, reverse(size(x_temp)), init = S -> localindexes(S) = zero(T), pids=pids) :: SharedMatrix{eltype(x_temp)}
     transpose!(xt, x_temp)
 
     # save p for convenience
     p = size(x,2)
 
-    return CovariateMatrix(x, p, xt)
+    return CovariateMatrix{eltype(x)}(x, p, xt, h) :: CovariateMatrix{eltype(x)}
 end
 
 # default to Float64 constructor
 function CovariateMatrix(
-    filename :: AbstractString;
+    filename :: ASCIIString;
     pids     :: DenseVector{Int} = procs(),
     header   :: Bool = false
 )
-    CovariateMatrix(Float64, filename, pids=pids, header=header)
+    CovariateMatrix(Float64, filename, pids=pids, header=header) :: CovariateMatrix{Float64}
 end
 
 # subroutines to define AbstractArray
@@ -84,13 +88,13 @@ function Base.setindex!(x::CovariateMatrix, i::Int, j::Int)
 end
 
 function Base.similar(x::CovariateMatrix, T::Real, dims::Dims)
-    CovariateMatrix(zeros(T, dims), dims[2], zeros(T, reverse(dims)))
+    CovariateMatrix(zeros(T, dims), dims[2], zeros(T, reverse(dims)), ["V" * "$i" for i = 1:dims[2]])
 end # function Base.similar
 
 function Base.similar(x::CovariateMatrix)
     n,p = size(x)
     T   = eltype(x)
-    CovariateMatrix(SharedArray(T, (n,p), pids=procs()), p, SharedArray(T, (p,n), pids=procs()))
+    CovariateMatrix(SharedArray(T, (n,p), pids=procs()), p, SharedArray(T, (p,n), pids=procs()), ["V" * "$i" for i = 1:p])
 end # function Base.similar
 
 display(x::CovariateMatrix) = display(x.x)

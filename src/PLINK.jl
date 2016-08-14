@@ -2,6 +2,7 @@ module PLINK
 
 using StatsBase: logistic, softplus
 using OpenCL
+using DataFrames
 
 import Base.size
 import Base.==
@@ -28,6 +29,7 @@ export maf
 export getindex
 export compress
 export read_plink_data
+export prednames 
 
 # constants used for decompression purposes
 const ZERO8  = convert(Int8,0)
@@ -90,8 +92,8 @@ const bin64  = Dict{Float64, Int8}(0.0 => ZERO8, NaN => ONE8, 1.0 => TWO8, 2.0 =
 
 # preloaded GPU kernels
 # these are merely long strongs that contain the code in the file
-const gpucode64 = open(readall("./kernels/iht_kernels64.cl"))
-const gpucode32 = open(readall("./kernels/iht_kernels32.cl"))
+const gpucode64 = readall(open(Pkg.dir() * "/PLINK/src/kernels/iht_kernels64.cl"))
+const gpucode32 = readall(open(Pkg.dir() * "/PLINK/src/kernels/iht_kernels32.cl"))
 
 include("covariate.jl")
 include("genomatrix.jl")

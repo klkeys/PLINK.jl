@@ -1,11 +1,11 @@
-immutable BEDFile{T <: Float, V <: SharedMatrix}
+immutable BEDFile{T <: Float}
     geno  :: GenoMatrix
-    covar :: CovariateMatrix{T, V}
+    covar :: CovariateMatrix{T}
     means :: SharedVector{T}
     precs :: SharedVector{T}
 end
 
-BEDFile(geno::GenoMatrix, covar::CovariateMatrix, means::SharedVector, precs::SharedVector) = BEDFile{eltype(covar)}(geno, covar, means, precs)
+BEDFile{T <: Float}(geno::GenoMatrix, covar::CovariateMatrix, means::SharedVector{T}, precs::SharedVector{T}) = BEDFile{eltype(covar)}(geno, covar, means, precs)
 
 # subroutines
 Base.size(x::BEDFile) = (x.geno.n, x.geno.p + x.covar.p)
@@ -21,7 +21,8 @@ function ==(x::BEDFile, y::BEDFile)
      x.geno == y.geno  && 
     x.covar == y.covar && 
     x.means == y.means && 
-    x.precs == y.precs
+    x.precs == y.precs &&
+    x.ids   == y.ids
 end
 
 Base.isequal(x::BEDFile, y::BEDFile) = x == y
@@ -46,6 +47,13 @@ function getindex{T <: Float}(
     return int2geno(x, x.geno[row, col])
 end
 
+# get names of all predictors 
+prednames(x::BEDFile) = [x.geno.snpids; x.covar.h] 
+
+
+### BEDFile constructors
+
+# construct (almost) everything from file
 function BEDFile(
     T          :: Type,
     filename   :: ASCIIString,
@@ -60,11 +68,11 @@ function BEDFile(
     pids       :: DenseVector{Int} = procs(),
     header     :: Bool = false
 )
-    x = GenoMatrix(filename, tfilename, n, p, blocksize, tblocksize, pids=pids)
-    y = CovariateMatrix(T,x2filename, pids=pids, header=header)
-    m = SharedArray(abspath(mfilename), T, (x.p + y.p,), pids=pids)
-    d = SharedArray(abspath(pfilename), T, (x.p + y.p,), pids=pids)
-    return BEDFile(x,y,m,d)
+    x = GenoMatrix(filename, tfilename, n, p, blocksize, tblocksize, pids=pids) :: GenoMatrix{T}
+    y = CovariateMatrix(T,x2filename, pids=pids, header=header) :: CovariateMatrix{T}
+    m = SharedArray(abspath(mfilename), T, (x.p + y.p,), pids=pids) :: SharedVector{T}
+    d = SharedArray(abspath(pfilename), T, (x.p + y.p,), pids=pids) :: SharedVector{T}
+    return BEDFile{T}(x,y,m,d)
 end
 
 # set default type for previous constructor to Float64
@@ -81,7 +89,7 @@ function BEDFile(
     pids       :: DenseVector{Int} = procs(), 
     header     :: Bool = false
 )
-    BEDFile(Float64, filename, tfilename, n, p, blocksize, tblocksize, x2filename, mfilename, pfilename, pids=pids, header=header)
+    BEDFile(Float64, filename, tfilename, n, p, blocksize, tblocksize, x2filename, mfilename, pfilename, pids=pids, header=header) :: BEDFile{Float64}
 end
 
 # constructor without blocksizes
@@ -99,7 +107,7 @@ function BEDFile(
 )
     blocksize  = ( (n-1) >>> 2) + 1
     tblocksize = ( (p-1) >>> 2) + 1
-    return BEDFile(T, filename, tfilename, n, p, blocksize, tblocksize, x2filename, mfilename, pfilename, pids=pids, header=header)
+    return BEDFile(T, filename, tfilename, n, p, blocksize, tblocksize, x2filename, mfilename, pfilename, pids=pids, header=header) :: BEDFile{T}
 end
 
 # set default type for previous constructor to Float64
@@ -114,7 +122,7 @@ function BEDFile(
     pids       :: DenseVector{Int} = procs(), 
     header     :: Bool = false
 )
-    BEDFile(Float64, filename, tfilename, n, p, xtfilename, mfilename, pfilename, pids=pids, header=header)
+    BEDFile(Float64, filename, tfilename, n, p, xtfilename, mfilename, pfilename, pids=pids, header=header) :: BEDFile{Float64}
 end
 
 
@@ -131,25 +139,25 @@ function BEDFile(
     x = GenoMatrix(filename, tfilename, pids=pids)
 
     # now make dummy CovariateMatrix 
-    x2  = SharedArray(T, x.n, 1, init = S -> localindexes(S) = zero(T), pids=pids)
-    x2t = SharedArray(T, 1, x.n, init = S -> localindexes(S) = zero(T), pids=pids)
+    x2  = SharedArray(T, x.n, 1, init = S -> localindexes(S) = zero(T), pids=pids) :: SharedMatrix{T}
+    x2t = SharedArray(T, 1, x.n, init = S -> localindexes(S) = zero(T), pids=pids) :: SharedMatrix{T}
     y   = CovariateMatrix(x2,1,x2t)
 
     # make dummy means, precisions
     # default yields no standardization (zero mean, identity precision)
     p = x.p + y.p
-    m = SharedArray(T, (p,), init = S -> localindexes(S) = zero(T), pids=pids) 
-    d = SharedArray(T, (p,), init = S -> localindexes(S) = one(T),  pids=pids) 
+    m = SharedArray(T, (p,), init = S -> localindexes(S) = zero(T), pids=pids) :: SharedVector{T} 
+    d = SharedArray(T, (p,), init = S -> localindexes(S) = one(T),  pids=pids) :: SharedVector{T}
 
     # construct BEDFile
-    z = BEDFile(x,y,m,d)
+    z = BEDFile{T}(x,y,m,d)
 
     # compute means, precisions
     # since we have a single covariate of all `a`, set the final mean/prec to 0/1
     mean!(z); z.means[end] = zero(T)
     prec!(z); z.precs[end] = one(T)
 
-    return z 
+    return z :: BEDFile{T} 
 end
 
 # set default type for previous constructor to Float64
@@ -158,7 +166,7 @@ function BEDFile(
     tfilename :: ASCIIString; 
     pids      :: DenseVector{Int} = procs()
 )
-    BEDFile(Float64, filename, tfilename, pids=pids)
+    BEDFile(Float64, filename, tfilename, pids=pids) :: BEDFile{Float64}
 end
 
 
@@ -181,18 +189,18 @@ function BEDFile(
 
     # make dummy means, precisions
     # default yields no standardization (zero mean, identity precision)
-    m = SharedArray(T, (x.p + y.p,), init = S -> localindexes(S) = zero(T), pids=pids) 
-    d = SharedArray(T, (x.p + y.p,), init = S -> localindexes(S) = one(T),  pids=pids) 
+    m = SharedArray(T, (x.p + y.p,), init = S -> localindexes(S) = zero(T), pids=pids) :: SharedVector{T} 
+    d = SharedArray(T, (x.p + y.p,), init = S -> localindexes(S) = one(T),  pids=pids) :: SharedVector{T}
 
     # construct BEDFile
-    z = BEDFile(x,y,m,d) 
+    z = BEDFile{T}(x,y,m,d) 
 
     # compute means, precisions
     # since we have a single covariate of all `a`, set the final mean/prec to 0/1
     mean!(z); z.means[end] = zero(T)
     prec!(z); z.precs[end] = one(T)
 
-    return z
+    return z :: BEDFile{T}
 end
 
 # set default type for previous constructor to Float64
@@ -203,7 +211,7 @@ function BEDFile(
     header     :: Bool = false, 
     pids       :: DenseVector{Int} = procs()
 )
-    BEDFile(Float64, filename, tfilename, x2filename, header=header, pids=pids)
+    BEDFile(Float64, filename, tfilename, x2filename, header=header, pids=pids) :: BEDFile{Float64}
 end
 
 # constructor to load all data from file
@@ -226,10 +234,10 @@ function BEDFile(
 
     # load means, precisions
     p = x.p + y.p
-    m = SharedArray(abspath(mfilename), T, (p,), pids=pids)
-    d = SharedArray(abspath(pfilename), T, (p,), pids=pids)
+    m = SharedArray(abspath(mfilename), T, (p,), pids=pids) :: SharedVector{T}
+    d = SharedArray(abspath(pfilename), T, (p,), pids=pids) :: SharedVector{T}
 
-    return BEDFile(x,y,m,d) 
+    return BEDFile{T}(x,y,m,d) 
 end
 
 # set default type for previous constructor to Float64
@@ -242,7 +250,7 @@ function BEDFile(
     pids       :: DenseVector{Int} = procs(),
     header     :: Bool = false, 
 )
-    BEDFile(Float64, filename, tfilename, x2filename, mfilename, pfilename, header=header, pids=pids)
+    BEDFile(Float64, filename, tfilename, x2filename, mfilename, pfilename, header=header, pids=pids) :: BEDFile{Float64}
 end
 
 # ambitious construtor that uses the location of the BED file and the covariates
@@ -269,7 +277,7 @@ function BEDFile(
     run(`$plinkpath $filename $p $n --transpose $tmppath`)
 
     # create a BEDFile object 
-    x = BEDFile(T, filename, tmppath, x2filename, pids=pids, header=header)
+    x = BEDFile(T, filename, tmppath, x2filename, pids=pids, header=header) :: BEDFile{T}
 
     # calculate means and precisions
     mean!(x)
@@ -282,11 +290,11 @@ function BEDFile(
     # delete temporary files before returning
     rm(tmppath)
 
-    return x
+    return x :: BEDFile{T}
 end
 
 # default type for previous constructor is Float64
-BEDFile(filename::ASCIIString, x2filename::ASCIIString; pids::DenseVector{Int} = procs(), header::Bool = false) = BEDFile(Float64, filename, x2filename, pids=pids, header=header) 
+BEDFile(filename::ASCIIString, x2filename::ASCIIString; pids::DenseVector{Int} = procs(), header::Bool = false) = BEDFile(Float64, filename, x2filename, pids=pids, header=header) :: BEDFile{Float64} 
 
 # another ambitious construtor that only uses the location of the BED file
 # unlike previous constructors, the default covariate is a vector of ones
@@ -303,16 +311,16 @@ function BEDFile(
     writedlm(tmpcovar, ones(n))
 
     # create a BEDFile object 
-    x = BEDFile(T, filename, tmpcovar, pids=pids, header=false)
+    x = BEDFile(T, filename, tmpcovar, pids=pids, header=false) :: BEDFile{T}
 
     # delete temporary files before returning
     rm(tmpcovar)
 
-    return x
+    return x :: BEDFile{T}
 end
 
 # default type for previous constructor is Float64
-BEDFile(filename::ASCIIString; pids::DenseVector{Int} = procs()) = BEDFile(Float64, filename, pids=pids) 
+BEDFile(filename::ASCIIString; pids::DenseVector{Int} = procs()) = BEDFile(Float64, filename, pids=pids) :: BEDFile{Float64} 
 
 function display(x::BEDFile)
     println("A BEDFile object with the following features:")
