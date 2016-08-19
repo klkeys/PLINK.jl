@@ -1,5 +1,5 @@
 function decomp_genocol!{T <: Float}(
-    Y     :: DenseMatrix{T}, 
+    Y     :: DenseVecOrMat{T}, 
     x     :: BEDFile{T},
     col   :: Int,
     snp   :: Int, 
@@ -16,7 +16,7 @@ function decomp_genocol!{T <: Float}(
 end
 
 function decomp_genocol!{T <: Float}(
-    Y      :: DenseMatrix{T}, 
+    Y      :: DenseVecOrMat{T}, 
     x      :: BEDFile{T},
     mask_n :: DenseVector{Int},
     col    :: Int,
@@ -38,7 +38,7 @@ function decomp_genocol!{T <: Float}(
 end
 
 function decomp_covarcol!{T <: Float}(
-    Y     :: DenseMatrix{T}, 
+    Y     :: DenseVecOrMat{T}, 
     x     :: BEDFile{T},
     col   :: Int,
     covar :: Int, 
@@ -53,7 +53,7 @@ function decomp_covarcol!{T <: Float}(
 end
 
 function decomp_covarcol!{T <: Float}(
-    Y      :: DenseMatrix{T}, 
+    Y      :: DenseVecOrMat{T}, 
     x      :: BEDFile{T},
     mask_n :: DenseVector{Int},
     col    :: Int,
@@ -246,7 +246,7 @@ function decompress_genotypes!{T <: Float}(
             # extract column mean, precision 
             m = x.means[snp]
             s = x.precs[snp]
-            if snp <= x.p
+            if snp <= x.geno.p
                 decomp_genocol!(Y, x, mask_n, col, snp, m, s, quiet=quiet)
             else
                 decomp_covarcol!(Y, x, mask_n, col, snp, m, s, quiet=quiet)
@@ -261,7 +261,7 @@ end
 
 
 """
-    decompress_genotypes!(y,x,snp,means,invstds)
+    decompress_genotypes!(y, x, col [, quiet=true])
 
 
 This function decompresses into vector `y` a standardized column (SNP) of a PLINK BED file housed in `x`.
@@ -269,22 +269,26 @@ Missing genotypes are sent to zero.
 
 Arguments:
 
-- `y` is the matrix to fill with (standardized) dosages.
+- `y` is the vector to fill with (standardized) dosages.
 - `x` is the BEDfile object that contains the compressed `n` x `p` design matrix.
-- `snp` is the current SNP (predictor) to extract.
+- `col` is the current predictor to extract.
+
+Optional Arguments:
+
+- `quiet` is a `Bool` to activate output. Defaults to `true` (no output). Used mostly for debugging.
 """
 function decompress_genotypes!{T <: Float}(
-    y       :: DenseVector{T},
-    x       :: BEDFile{T},
-    snp     :: Int,
-    quiet   :: Bool = true
+    y     :: DenseVector{T},
+    x     :: BEDFile{T},
+    col   :: Int;
+    quiet :: Bool = true
 )
-    m = x.means[snp]
-    s = x.precs[snp]
-    if snp <= x.p
-        decomp_genocol!(Y, x, col, snp, m, s, quiet=quiet)
+    m = x.means[col]
+    s = x.precs[col]
+    if col <= x.geno.p 
+        decomp_genocol!(y, x, 1, col, m, s, quiet=quiet)
     else
-        decomp_covarcol!(Y, x, col, snp, m, s, quiet=quiet)
+        decomp_covarcol!(y, x, 1, col, m, s, quiet=quiet)
     end
     return nothing
 end

@@ -196,9 +196,21 @@ function BEDFile(
     z = BEDFile{T}(x,y,m,d) 
 
     # compute means, precisions
-    # since we have a single covariate of all `a`, set the final mean/prec to 0/1
-    mean!(z); z.means[end] = zero(T)
-    prec!(z); z.precs[end] = one(T)
+#    # since we have a single covariate of all `a`, set the final mean/prec to 0/1
+#    mean!(z); z.means[end] = zero(T)
+#    prec!(z); z.precs[end] = one(T)
+    mean!(z);
+    prec!(z);
+
+    # loop through covariate matrix
+    # if we have a column with everything equal to the first element of column,
+    # then change the mean/prec for that covariate to 0/1
+    for i = 1:z.covar.p
+        if all(sub(z.covar.x, :, i) .== z.covar.x[1,i])
+            z.means[z.geno.p + i] = zero(T)
+            z.precs[z.geno.p + i] = one(T)
+        end
+    end
 
     return z :: BEDFile{T}
 end
@@ -270,9 +282,12 @@ function BEDFile(
     bimfile = filename[1:(endof(filename)-3)] * "bim"
     p       = countlines(bimfile)
 
-    # use Desktop as a temporary directory for transpose
+#    # use Desktop as a temporary directory for transpose
+#    # here we call our PLINK utility to transpose the file
+#    tmppath = expanduser("~/Desktop/tbed_$(myid()).bed")
+    # use Julia temporary directory for transpose
     # here we call our PLINK utility to transpose the file
-    tmppath = expanduser("~/Desktop/tbed_$(myid()).bed")
+    tmppath = ENV["TMPDIR"] * "tbed_$(myid()).bed" 
     plinkpath = expanduser("~/.julia/v0.4/PLINK/utils/./plink_data")
     run(`$plinkpath $filename $p $n --transpose $tmppath`)
 
@@ -283,9 +298,19 @@ function BEDFile(
     mean!(x)
     prec!(x)
 
-    # covariate mean/precision must be 0.0/1.0 
-    x.means[end] = zero(T)
-    x.precs[end] = one(T)
+    # loop through covariate matrix
+    # if we have a column with everything equal to the first element of column,
+    # then change the mean/prec for that covariate to 0/1
+    for i = 1:x.covar.p
+        if all(sub(x.covar.x, :, i) .== x.covar.x[1,i])
+            x.means[x.geno.p + i] = zero(T)
+            x.precs[x.geno.p + i] = one(T)
+        end
+    end
+
+#    # covariate mean/precision must be 0.0/1.0 
+#    x.means[end] = zero(T)
+#    x.precs[end] = one(T)
 
     # delete temporary files before returning
     rm(tmppath)
@@ -305,7 +330,7 @@ function BEDFile(
     pids     :: DenseVector{Int} = procs()
 )
     # make a temporary covariate file
-    tmpcovar = expanduser("~/Desktop/x_$(myid()).txt")
+    tmpcovar = ENV["TMPDIR"] * "x_$(myid()).txt" 
     famfile  = filename[1:(endof(filename)-3)] * "fam"
     n        = countlines(famfile)
     writedlm(tmpcovar, ones(n))

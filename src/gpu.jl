@@ -217,7 +217,7 @@ function copy_xty!{T <: Float}(xty::DenseVector{T}, v::PlinkGPUVariables{T})
 end
 
 """
-    At_mul_B!(xty, x::BEDFile, y, mask_, v)
+    At_mul_B!(xty, x::BEDFile, y, mask_n, v)
 
 Compute `x' * y` for a `BEDFile` object `x` using a GPU command queue configured in the `PlinkGPUVariables` object `v`.
 """
@@ -238,24 +238,42 @@ function Base.At_mul_B!{T <: Float}(
     return nothing
 end
 
-
 """
     At_mul_B(x::BEDFile, y, kernfile, mask_n)
 
 If called with a kernel file, then `At_mul_B()` will attempt to accelerate computations with a GPU.
 """
 function Base.At_mul_B{T <: Float}(
-    x       :: BEDFile{T},
-    y       :: SharedVector{T},
-    kern    :: ASCIIString;
-    pids    :: DenseVector{Int} = procs(),
-    mask_n  :: DenseVector{Int} = ones(Int, size(y))
+    x      :: BEDFile{T},
+    y      :: SharedVector{T},
+    v      :: PlinkGPUVariables{T};
+    mask_n :: DenseVector{Int} = ones(Int, size(y)),
+    pids   :: DenseVector{Int} = procs(),
 )
-    xty = SharedArray(T, size(x,2), init = S -> S[localindexes(S)] = zero(T), pids=pids)
-    v = PlinkGPUVariables(xty, x, y, kern, mask_n) 
+    xty = SharedArray(T, (size(x,2),), pids=pids) :: SharedVector{T}
+#    v = PlinkGPUVariables(xty, x, y, kern, mask_n) 
     At_mul_B!(xty, x, y, v) 
     return xty
 end
+
+
+#"""
+#    At_mul_B(x::BEDFile, y, kernfile, mask_n)
+#
+#If called with a kernel file, then `At_mul_B()` will attempt to accelerate computations with a GPU.
+#"""
+#function Base.At_mul_B{T <: Float}(
+#    x       :: BEDFile{T},
+#    y       :: SharedVector{T},
+#    kern    :: ASCIIString;
+#    pids    :: DenseVector{Int} = procs(),
+#    mask_n  :: DenseVector{Int} = ones(Int, size(y))
+#)
+#    xty = SharedArray(T, size(x,2), init = S -> S[localindexes(S)] = zero(T), pids=pids)
+#    v = PlinkGPUVariables(xty, x, y, kern, mask_n) 
+#    At_mul_B!(xty, x, y, v) 
+#    return xty
+#end
 
 #function Base.At_mul_B{T <: Float}(
 #    x           :: BEDFile{T},
