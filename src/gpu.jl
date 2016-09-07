@@ -70,12 +70,10 @@ function PlinkGPUVariables{T <: Float}(
     kern   :: ASCIIString      = readall(open(expanduser("/.julia/v0.4/PLINK/src/kernels/iht_kernels64.cl"))),
     mask_n :: DenseVector{Int} = ones(Int, size(y))
 )
-#    n,p         = size(x,2)
     n,p         = size(x.geno)
     wg_size     = 512
     y_chunks    = div(n, wg_size) + (n % wg_size != 0 ? 1 : 0)
     y_blocks    = div(y_chunks, wg_size) + (y_chunks % wg_size != 0 ? 1 : 0)
-#    r_chunks    = div(x.geno.p*y_chunks, wg_size) + ((x.geno.p*y_chunks) % wg_size != 0 ? 1 : 0)
     r_chunks    = div(p*y_chunks, wg_size) + ((p*y_chunks) % wg_size != 0 ? 1 : 0)
     wg_size32   = convert(Int32, wg_size)
     n32         = convert(Int32, n)
@@ -87,7 +85,6 @@ function PlinkGPUVariables{T <: Float}(
     device      = last(cl.devices(:gpu))
     ctx         = cl.Context(device) :: cl.Context
     queue       = cl.CmdQueue(ctx) :: cl.CmdQueue
-#    program     = cl.Program(ctx, source=kern) |> cl.build!
     program     = cl.Program(ctx, source=kern) :: cl.Program
     cl.build!(program)
     xtyk        = cl.Kernel(program, "compute_xt_times_vector")
@@ -99,7 +96,6 @@ function PlinkGPUVariables{T <: Float}(
     p_buff      = cl.Buffer(T,    ctx, (:r,  :copy), hostbuf = sdata(x.precs)) :: cl.Buffer{T}
     df_buff     = cl.Buffer(T,    ctx, (:rw, :copy), hostbuf = sdata(z)) :: cl.Buffer{T}
     red_buff    = cl.Buffer(T,    ctx, (:rw), p*y_chunks) :: cl.Buffer{T}
-#    xty_buff    = cl.Buffer(T,    ctx, (:rw), x.geno.p + x.covar.p)
     mask_buff   = cl.Buffer(Int,  ctx, (:r,  :copy), hostbuf = sdata(mask_n)) :: cl.Buffer{Int}
     genofloat   = cl.LocalMem(T, wg_size)
 
@@ -192,27 +188,22 @@ end
 
 # wrapper functions for At_mul_B!
 function copy_y!{T <: Float}(v::PlinkGPUVariables{T}, y::SharedVector{T})
-#    cl.wait(cl.copy!(v.queue, v.y_buff, sdata(y)))
     cl.copy!(v.queue, v.y_buff, sdata(y)) :: cl.NannyEvent
 end
 
 function reset_x!{T <: Float}(v::PlinkGPUVariables{T})
-#    cl.wait(cl.call(v.queue, v.reset_x, (v.wg_size*v.r_chunks,1,1), nothing, v.red_buff, v.r_length32, zero(T)))
     cl.call(v.queue, v.reset_x, (v.wg_size*v.r_chunks,1,1), nothing, v.red_buff, v.r_length32, zero(T)) :: cl.Event
 end
 
 function xty!{T <: Float}(v::PlinkGPUVariables{T})
-#    cl.wait(cl.call(v.queue, v.xtyk, (v.wg_size*v.y_chunks, v.p, 1), (v.wg_size, 1, 1), v.n32, v.p32, v.y_chunks32, v.blocksize32, v.wg_size32, v.x_buff, v.red_buff, v.y_buff, v.m_buff, v.p_buff, v.mask_buff, v.genofloat))
     cl.call(v.queue, v.xtyk, (v.wg_size*v.y_chunks, v.p, 1), (v.wg_size, 1, 1), v.n32, v.p32, v.y_chunks32, v.blocksize32, v.wg_size32, v.x_buff, v.red_buff, v.y_buff, v.m_buff, v.p_buff, v.mask_buff, v.genofloat) :: cl.Event
 end
 
 function xty_reduce!{T <: Float}(v::PlinkGPUVariables{T})
-#    cl.wait(cl.call(v.queue, v.rxtyk, (v.wg_size,v.p,1), (v.wg_size,1,1), v.n32, v.y_chunks32, v.y_blocks32, v.wg_size32, v.red_buff, v.df_buff, v.genofloat))
     cl.call(v.queue, v.rxtyk, (v.wg_size,v.p,1), (v.wg_size,1,1), v.n32, v.y_chunks32, v.y_blocks32, v.wg_size32, v.red_buff, v.df_buff, v.genofloat) :: cl.Event
 end
 
 function copy_xty!{T <: Float}(xty::DenseVector{T}, v::PlinkGPUVariables{T})
-#    cl.wait(cl.copy!(v.queue, sdata(xty), v.df_buff))
     cl.copy!(v.queue, sdata(xty), v.df_buff) :: cl.NannyEvent
 end
 
@@ -248,10 +239,9 @@ function Base.At_mul_B{T <: Float}(
     y      :: SharedVector{T},
     v      :: PlinkGPUVariables{T};
     mask_n :: DenseVector{Int} = ones(Int, size(y)),
-    pids   :: DenseVector{Int} = procs(),
+    pids   :: DenseVector{Int} = procs(x),
 )
     xty = SharedArray(T, (size(x,2),), pids=pids) :: SharedVector{T}
-#    v = PlinkGPUVariables(xty, x, y, kern, mask_n) 
     At_mul_B!(xty, x, y, v) 
     return xty
 end
