@@ -6,7 +6,7 @@ immutable GenoMatrix
     p          :: Int
     blocksize  :: Int
     tblocksize :: Int
-    snpids     :: Vector{UTF8String}
+    snpids     :: Vector{String}
 
     GenoMatrix(x,xt,n,p,blocksize,tblocksize,snpids) = new(x,xt,n,p,blocksize,tblocksize,snpids)
 end
@@ -15,8 +15,8 @@ end
 # consequently the snpids field never appers as an argument
 # first constructor uses all remaining fields of GenoMatrix as arguments
 function GenoMatrix(
-    filename   :: ASCIIString,
-    tfilename  :: ASCIIString,
+    filename   :: String,
+    tfilename  :: String,
     n          :: Int,
     p          :: Int,
     blocksize  :: Int,
@@ -28,13 +28,13 @@ function GenoMatrix(
     bimfile = filename[1:(endof(filename)-3)] * "bim"
 
     # specify column element types of BIM file 
-    eltypes = [Int, UTF8String, Int, Int, UTF8String, UTF8String]
+    eltypes = [Int, String, Int, Int, String, String]
 
     # load BIM
     df = readtable(bimfile, header = false, separator = '\t', eltypes = eltypes)
 
     # second column of BIM file contains the SNP ids
-    snpids = convert(Vector{UTF8String}, df[:x2]) :: Vector{UTF8String} 
+    snpids = convert(Vector{String}, df[:x2]) :: Vector{String} 
     
     x = GenoMatrix(
         read_bedfile(filename, pids=pids), 
@@ -46,8 +46,8 @@ end
 
 # another constructor for when blocksizes are not precomputed
 function GenoMatrix(
-    filename  :: ASCIIString,
-    tfilename :: ASCIIString,
+    filename  :: String,
+    tfilename :: String,
     n         :: Int,
     p         :: Int;
     pids      :: DenseVector{Int} = procs()
@@ -60,8 +60,8 @@ end
 
 # constructor to load entirely from file
 function GenoMatrix(
-    filename  :: ASCIIString,
-    tfilename :: ASCIIString;
+    filename  :: String,
+    tfilename :: String;
     pids      :: DenseVector{Int} = procs()
 )
     # find n from the corresponding FAM file
@@ -164,7 +164,7 @@ Output:
   at the end of each block.
 """
 function read_bedfile(
-    filename  :: ASCIIString; 
+    filename  :: String; 
     transpose :: Bool = false, 
     pids      :: DenseVector{Int} = procs()
 )

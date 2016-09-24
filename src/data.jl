@@ -13,7 +13,7 @@ would read the trio `mydata.bed`, `mydata.bim`, and `mydata.fam` in the current 
 """
 function read_plink_data(
     T      :: Type, 
-    xpath  :: ASCIIString; 
+    xpath  :: String; 
     pids   :: DenseVector{Int} = procs(),
     header :: Bool = false,
     delim  :: Char = ' '
@@ -43,7 +43,7 @@ function read_plink_data(
 end
 
 # default for previous function is Float64
-read_plink_data(filepath::ASCIIString; pids::DenseVector{Int} = procs(), header::Bool = false, delim::Char = ' ') = read_plink_data(Float64, filepath, pids=pids, header=header, delim=delim)
+read_plink_data(filepath::String; pids::DenseVector{Int} = procs(), header::Bool = false, delim::Char = ' ') = read_plink_data(Float64, filepath, pids=pids, header=header, delim=delim)
 
 
 """
@@ -55,8 +55,8 @@ Set `isbin=true` to load from a _binary_ file.
 """
 function read_plink_data(
     T      :: Type, 
-    xpath  :: ASCIIString, 
-    ypath  :: ASCIIString; 
+    xpath  :: String, 
+    ypath  :: String; 
     pids   :: DenseVector{Int} = procs(),
     isbin  :: Bool = false,
     header :: Bool = false,
@@ -82,7 +82,7 @@ function read_plink_data(
 end
 
 # default for previous function is Float64
-read_plink_data(xpath::ASCIIString, ypath::ASCIIString, pids::DenseVector{Int} = procs(), isbin::Bool = false, header::Bool = false, delim::Char = ' ') = read_plink_data(Float64, xpath, ypath, pids=pids, isbin=isbin, header=header, delim=delim)
+read_plink_data(xpath::String, ypath::String, pids::DenseVector{Int} = procs(), isbin::Bool = false, header::Bool = false, delim::Char = ' ') = read_plink_data(Float64, xpath, ypath, pids=pids, isbin=isbin, header=header, delim=delim)
 
 
 """
@@ -94,9 +94,9 @@ Set `isbin=true` to load from a _binary_ file.
 """
 function read_plink_data(
     T         :: Type, 
-    xpath     :: ASCIIString, 
-    covpath   :: ASCIIString, 
-    ypath     :: ASCIIString;
+    xpath     :: String, 
+    covpath   :: String, 
+    ypath     :: String;
     pids      :: DenseVector{Int} = procs(),
     covheader :: Bool = false,
     covdelim  :: Char = ' ',
@@ -124,4 +124,4 @@ function read_plink_data(
 end
 
 # default for previous function is Float64
-read_plink_data(xpath::ASCIIString, covpath::ASCIIString, ypath::ASCIIString, pids::DenseVector{Int} = procs(), covheader::Bool = false, covdelim::Char = ' ', isbin::Bool = false, yheader::Bool = false, ydelim::Char = ' ' ) = read_plink_data(Float64, xpath, covpath, ypath, pids=pids, covheader=covheader, covdelim=covdevlim, isbin=isbin, yheader=yheader, ydelim=ydelim)
+read_plink_data(xpath::String, covpath::String, ypath::String, pids::DenseVector{Int} = procs(), covheader::Bool = false, covdelim::Char = ' ', isbin::Bool = false, yheader::Bool = false, ydelim::Char = ' ' ) = read_plink_data(Float64, xpath, covpath, ypath, pids=pids, covheader=covheader, covdelim=covdevlim, isbin=isbin, yheader=yheader, ydelim=ydelim)

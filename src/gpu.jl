@@ -1,5 +1,5 @@
 "A shortcut for OpenCL module name."
-const cl = OpenCL
+#const cl = OpenCL
 
 type PlinkGPUVariables{T <: Float, V <: cl.Buffer}
     df_buff     :: V 
@@ -67,7 +67,7 @@ function PlinkGPUVariables{T <: Float}(
     z      :: DenseVector{T},
     x      :: BEDFile{T},
     y      :: DenseVector{T},
-    kern   :: ASCIIString      = readall(open(expanduser("/.julia/v0.4/PLINK/src/kernels/iht_kernels64.cl"))),
+    kern   :: String      = readall(open(expanduser("/.julia/v0.4/PLINK/src/kernels/iht_kernels64.cl"))),
     mask_n :: DenseVector{Int} = ones(Int, size(y))
 )
     n,p         = size(x.geno)
@@ -255,7 +255,7 @@ end
 #function Base.At_mul_B{T <: Float}(
 #    x       :: BEDFile{T},
 #    y       :: SharedVector{T},
-#    kern    :: ASCIIString;
+#    kern    :: String;
 #    pids    :: DenseVector{Int} = procs(),
 #    mask_n  :: DenseVector{Int} = ones(Int, size(y))
 #)

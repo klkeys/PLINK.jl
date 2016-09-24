@@ -3,33 +3,34 @@ immutable CovariateMatrix{T <: Float} <: AbstractArray{T, 2}
     x  :: SharedMatrix{T} 
     p  :: Int
     xt :: SharedMatrix{T} 
-    h  :: Vector{UTF8String} # header 
+    h  :: Vector{String} # header 
 
-#    CovariateMatrix(x::SharedMatrix{T}, p::Int, xt::SharedMatrix{T}, h::UTF8String) = new(x,p,xt,h)
+    CovariateMatrix(x::SharedMatrix{T}, p::Int, xt::SharedMatrix{T}, h::String) = new(x,p,xt,h)
 end
 
-function CovariateMatrix{T <: Float}(
-    x  :: SharedMatrix{T},
-    p  :: Int,
-    xt :: SharedMatrix{T},
-    h  :: Vector{UTF8String}
-)
-    CovariateMatrix{eltype(x)}(x, p, xt, h) :: CovariateMatrix{eltype(x)}
-end
+### 22 Sep 2016: not needed in Julia v0.5?
+#function CovariateMatrix{T <: Float}(
+#    x  :: SharedMatrix{T},
+#    p  :: Int,
+#    xt :: SharedMatrix{T},
+#    h  :: Vector{String}
+#)
+#    CovariateMatrix{eltype(x)}(x, p, xt, h) :: CovariateMatrix{eltype(x)}
+#end
 
 function CovariateMatrix(
     T        :: Type, 
-    filename :: ASCIIString;
+    filename :: String;
     pids     :: DenseVector{Int} = procs(),
     header   :: Bool = false
 )
     # first load data
     if header
         x_temp, h = readdlm(filename, T, header=true) :: Matrix{T}, Matrix{AbstractString}
-        h = convert(Vector{UTF8String}, h) :: Vector{UTF8String}
+        h = convert(Vector{String}, h) :: Vector{String}
     else
         x_temp = readdlm(filename, T, header=false) :: Matrix{T}
-        h = convert(Vector{UTF8String}, ["V" * "$i" for i = 1:size(x_temp,2)]) :: Vector{UTF8String}
+        h = convert(Vector{String}, ["V" * "$i" for i = 1:size(x_temp,2)]) :: Vector{String}
     end
 
     # make SharedArray container for x_temp
@@ -48,7 +49,7 @@ end
 
 # default to Float64 constructor
 function CovariateMatrix(
-    filename :: ASCIIString;
+    filename :: String;
     pids     :: DenseVector{Int} = procs(),
     header   :: Bool = false
 )
