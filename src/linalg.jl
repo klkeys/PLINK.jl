@@ -119,7 +119,7 @@ Optional Arguments:
 function sumsq{T <: Float}(
     x       :: BEDFile{T};
     shared  :: Bool = true,
-    pids    :: DenseVector{Int} = procs(),
+    pids    :: Vector{Int} = procs(),
 )
     p = size(x,2)
     y = ifelse(shared, SharedArray(T, p, init = S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, p))
@@ -199,7 +199,7 @@ function Base.mean!{T <: Float}(x::BEDFile{T})
     end
 #    y[(x.geno.p+1):end] = vec(mean(x.covar.x,1))
     @inbounds for i = 1:x.covar.p
-        x.means[x.geno.p + i] = mean(sub(x.covar.x, :, i))
+        x.means[x.geno.p + i] = mean(view(x.covar.x, :, i))
     end
     return nothing
 end
@@ -231,8 +231,8 @@ function prec_col{T <: Float}(x::BEDFile{T}, snp::Int)
     end
 
     # now compute the std = sqrt(s / (u - 1)))
-    s = ifelse(s <= zero(T), zero(T), sqrt((u - one(T)) / s))
-    return s
+    s = s <= zero(T) ? zero(T) : sqrt((u - one(T)) / s)
+    return s :: T
 end
 
 """
@@ -439,7 +439,7 @@ function Base.A_mul_B!{T <: Float}(
     idx    :: BitArray{1},
     k      :: Int,
     mask_n :: DenseVector{Int};
-    pids   :: DenseVector{Int} = procs(),
+    pids   :: Vector{Int} = procs(),
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
@@ -483,7 +483,7 @@ function Base.A_mul_B!{T <: Float}(
     b    :: DenseVector{T},
     idx  :: BitArray{1},
     k    :: Int;
-    pids :: DenseVector{Int} = procs(),
+    pids :: Vector{Int} = procs(),
 )
     # error checking
     n = length(xb)
@@ -513,9 +513,9 @@ function A_mul_B{T <: Float}(
     idx    :: BitArray{1},
     k      :: Int,
     mask_n :: DenseVector{Int};
-    pids   :: DenseVector{Int} = procs(),
+    pids   :: Vector{Int} = procs(),
 )
-    xb = SharedArray(T, x.geno.n, init = S -> S[localindexes(S)] = zero(T), pids=pids)
+    xb = SharedArray(T, x.geno.n, init = S -> S[localindexes(S)] = zero(T), pids=pids) :: SharedVector{T}
     A_mul_B!(xb, x, b, idx, k, mask_n, pids=pids)
     return xb
 end
@@ -559,9 +559,9 @@ function A_mul_B{T <: Float}(
     b    :: SharedVector{T},
     idx  :: BitArray{1},
     k    :: Int;
-    pids :: DenseVector{Int} = procs(),
+    pids :: Vector{Int} = procs(),
 )
-    xb = SharedArray(T, x.geno.n, init = S -> S[localindexes(S)] = zero(T), pids=pids)
+    xb = SharedArray(T, x.geno.n, init = S -> S[localindexes(S)] = zero(T), pids=pids) :: SharedVector{T}
     A_mul_B!(xb, x, b, idx, k) 
     return xb
 end
@@ -630,9 +630,10 @@ function Base.At_mul_B!{T <: Float}(
     x       :: BEDFile{T},
     y       :: SharedVector{T},
     mask_n  :: DenseVector{Int};
-    pids    :: DenseVector{Int} = procs(),
+    pids    :: Vector{Int} = procs(),
     sy      :: T = sum(y),
-    sminus  :: T = sum(y[mask_n .== 0])
+    #sminus  :: T = sum(y[mask_n .== 0])
+    sminus  :: T = begin z = mask_n .== 0; sum(y[z]) end
 )
     # error checking
     p = size(x,2)
@@ -657,7 +658,8 @@ function At_mul_B!{T <: Float}(
     y       :: Vector{T},
     mask_n  :: DenseVector{Int},
     sy      :: T = sum(y),
-    sminus  :: T = sum(y[mask_n .== 0])
+    #sminus  :: T = sum(y[mask_n .== 0])
+    sminus  :: T = begin z = mask_n .== 0; sum(y[z]) end
 )
     # error checking
     p = size(x,2)
@@ -727,7 +729,7 @@ function Base.At_mul_B!{T <: Float}(
     xty     :: SharedVector{T},
     x       :: BEDFile{T},
     y       :: SharedVector{T};
-    pids    :: DenseVector{Int} = procs(),
+    pids    :: Vector{Int} = procs(),
     sy      :: T = sum(y)
 )
     # error checking
@@ -790,11 +792,11 @@ function Base.At_mul_B{T <: Float}(
     x       :: BEDFile{T},
     y       :: SharedVector{T},
     mask_n  :: DenseVector{Int};
-    pids    :: DenseVector{Int} = procs(),
+    pids    :: Vector{Int} = procs(),
     sy      :: T = sum(y)
 )
     p = size(x,2) 
-    xty = SharedArray(T, p, init = S -> S[localindexes(S)] = zero(T), pids=pids)
+    xty = SharedArray(T, p, init = S -> S[localindexes(S)] = zero(T), pids=pids) :: SharedVector{T}
     At_mul_B!(xty, x, y, mask_n, pids=pids, sy=sy)
     return xty
 end

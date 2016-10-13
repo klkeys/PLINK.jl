@@ -154,7 +154,7 @@ function Base.At_mul_B!{T <: Float}(
     y_buff      :: cl.Buffer,
     mask_n      :: DenseVector{Int},
     mask_buff   :: cl.Buffer,
-    queue       :: cl.CmdQueue,
+    q           :: cl.CmdQueue,
     m_buff      :: cl.Buffer,
     p_buff      :: cl.Buffer,
     red_buff    :: cl.Buffer,
@@ -176,12 +176,17 @@ function Base.At_mul_B!{T <: Float}(
     r_length32  :: Int32,
     genofloat   :: cl.LocalMem
 )
-    cl.wait(cl.copy!(queue, y_buff, sdata(y)))
+    #cl.wait(cl.copy!(queue, y_buff, sdata(y)))
 #   cl.fill!(queue, red_buff, zero(T))    # only works with OpenCL 1.2
-    cl.wait(cl.call(queue, reset_x, (wg_size*r_chunks,1,1), nothing, red_buff, r_length32, zero(T)))
-    cl.wait(cl.call(queue, xtyk, (wg_size*y_chunks,p,1), (wg_size,1,1), n32, p32, y_chunks32, blocksize32, wg_size32, x_buff, red_buff, y_buff, m_buff, p_buff, mask_buff, genofloat))
-    cl.wait(cl.call(queue, rxtyk, (wg_size,p,1), (wg_size,1,1), n32, y_chunks32, y_blocks32, wg_size32, red_buff, df_buff, genofloat))
-    cl.wait(cl.copy!(queue, sdata(df), df_buff))
+    #cl.wait(cl.call(queue, reset_x, (wg_size*r_chunks,1,1), nothing, red_buff, r_length32, zero(T)))
+    #cl.wait(cl.call(queue, xtyk, (wg_size*y_chunks,p,1), (wg_size,1,1), n32, p32, y_chunks32, blocksize32, wg_size32, x_buff, red_buff, y_buff, m_buff, p_buff, mask_buff, genofloat))
+    #cl.wait(cl.call(queue, rxtyk, (wg_size,p,1), (wg_size,1,1), n32, y_chunks32, y_blocks32, wg_size32, red_buff, df_buff, genofloat))
+    #cl.wait(cl.copy!(queue, sdata(df), df_buff))
+    cl.wait(cl.copy!(q, y_buff, sdata(y)))
+    cl.wait(queue(reset_x, (wg_size*r_chunks,1,1), nothing, red_buff, r_length32, zero(T)))
+    cl.wait(queue(xtyk, (wg_size*y_chunks,p,1), (wg_size,1,1), n32, p32, y_chunks32, blocksize32, wg_size32, x_buff, red_buff, y_buff, m_buff, p_buff, mask_buff, genofloat))
+    cl.wait(queue(rxtyk, (wg_size,p,1), (wg_size,1,1), n32, y_chunks32, y_blocks32, wg_size32, red_buff, df_buff, genofloat))
+    cl.wait(cl.copy!(q, sdata(df), df_buff))
     df_x2!(df, x, y, mask_n)
     return nothing
 end
@@ -192,15 +197,18 @@ function copy_y!{T <: Float}(v::PlinkGPUVariables{T}, y::SharedVector{T})
 end
 
 function reset_x!{T <: Float}(v::PlinkGPUVariables{T})
-    cl.call(v.queue, v.reset_x, (v.wg_size*v.r_chunks,1,1), nothing, v.red_buff, v.r_length32, zero(T)) :: cl.Event
+    #cl.call(v.queue, v.reset_x, (v.wg_size*v.r_chunks,1,1), nothing, v.red_buff, v.r_length32, zero(T)) :: cl.Event
+    queue(v.reset_x, (v.wg_size*v.r_chunks,1,1), nothing, v.red_buff, v.r_length32, zero(T)) :: cl.Event
 end
 
 function xty!{T <: Float}(v::PlinkGPUVariables{T})
-    cl.call(v.queue, v.xtyk, (v.wg_size*v.y_chunks, v.p, 1), (v.wg_size, 1, 1), v.n32, v.p32, v.y_chunks32, v.blocksize32, v.wg_size32, v.x_buff, v.red_buff, v.y_buff, v.m_buff, v.p_buff, v.mask_buff, v.genofloat) :: cl.Event
+    #cl.call(v.queue, v.xtyk, (v.wg_size*v.y_chunks, v.p, 1), (v.wg_size, 1, 1), v.n32, v.p32, v.y_chunks32, v.blocksize32, v.wg_size32, v.x_buff, v.red_buff, v.y_buff, v.m_buff, v.p_buff, v.mask_buff, v.genofloat) :: cl.Event
+    queue(v.xtyk, (v.wg_size*v.y_chunks, v.p, 1), (v.wg_size, 1, 1), v.n32, v.p32, v.y_chunks32, v.blocksize32, v.wg_size32, v.x_buff, v.red_buff, v.y_buff, v.m_buff, v.p_buff, v.mask_buff, v.genofloat) :: cl.Event
 end
 
 function xty_reduce!{T <: Float}(v::PlinkGPUVariables{T})
-    cl.call(v.queue, v.rxtyk, (v.wg_size,v.p,1), (v.wg_size,1,1), v.n32, v.y_chunks32, v.y_blocks32, v.wg_size32, v.red_buff, v.df_buff, v.genofloat) :: cl.Event
+    #cl.call(v.queue, v.rxtyk, (v.wg_size,v.p,1), (v.wg_size,1,1), v.n32, v.y_chunks32, v.y_blocks32, v.wg_size32, v.red_buff, v.df_buff, v.genofloat) :: cl.Event
+    queue(v.rxtyk, (v.wg_size,v.p,1), (v.wg_size,1,1), v.n32, v.y_chunks32, v.y_blocks32, v.wg_size32, v.red_buff, v.df_buff, v.genofloat) :: cl.Event
 end
 
 function copy_xty!{T <: Float}(xty::DenseVector{T}, v::PlinkGPUVariables{T})
