@@ -379,6 +379,46 @@ function Base.dot{T <: Float}(
     return (s - (sy - sminus)*m)*d
 end
 
+function Base.dot{T <: Float}(
+    x       :: BEDFile{T},
+    y       :: DenseVector{T},
+    snp     :: Int,
+    mask_n  :: BitArray{1}, 
+    sy      :: T = sum(y),
+    sminus  :: T = sum(y[!mask_n]) # need this for standardization purposes
+)
+    s = zero(T)        # accumulation variable, will eventually equal dot(y,z)
+    m = x.means[snp]   # mean of SNP predictor
+    d = x.precs[snp]   # 1/std of SNP predictor
+
+    if snp <= x.geno.p
+
+        # loop over all individuals
+        @inbounds for case = 1:x.geno.n
+
+            # only accumulate if case is not masked
+            if mask_n[case]
+                t = x.geno[case,snp]
+
+                # handle exceptions on t
+                u = t == ONE8 ? zero(T) : int2geno(x,t)
+
+                # accumulate dot product
+                s += y[case] * u 
+            end
+        end
+    else
+        @inbounds for case = 1:x.geno.n
+            if mask_n[case]
+                s += x.covar.x[case,snp-x.geno.p] * y[case]
+            end
+        end
+    end
+
+    # return the (normalized) dot product
+    return (s - (sy - sminus)*m)*d
+end
+
 
 """
     dott(x::BEDFile, b, case, idx::BitArray{1})
@@ -450,6 +490,31 @@ function Base.A_mul_B!{T <: Float}(
     # loop over the desired number of predictors
     @inbounds for case = 1:n
         if mask_n[case] == 1
+            xb[case] = dott(x, b, case, idx)
+        end
+    end
+
+    return nothing
+end
+
+function Base.A_mul_B!{T <: Float}(
+    xb     :: DenseVector{T},
+    x      :: BEDFile{T},
+    b      :: DenseVector{T},
+    idx    :: BitArray{1},
+    k      :: Int,
+    mask_n :: BitArray{1}; 
+    pids   :: Vector{Int} = procs(),
+)
+    # error checking
+    0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
+    k >= sum(idx)       || throw(ArgumentError("Must have k >= sum(idx) or X*b will not compute correctly"))
+    n = length(xb)
+    n == x.geno.n       || throw(ArgumentError("xb has $n rows but x has $(x.geno.n) rows"))
+
+    # loop over the desired number of predictors
+    @inbounds for case = 1:n
+        if mask_n[case]
             xb[case] = dott(x, b, case, idx)
         end
     end
@@ -593,8 +658,23 @@ function At_mul_B_chunk!{T <: Float}(
     y      :: SharedVector{T},
     mask_n :: DenseVector{Int},
     irange :: UnitRange{Int},
-    sy      :: T = sum(y),
-    sminus  :: T = sum(y[mask_n .== 0])
+    sy     :: T = sum(y),
+    sminus :: T = sum(y[mask_n .== 0])
+)
+    @inbounds for i in irange
+        xty[i] = dot(x, y, i, mask_n, sy, sminus) 
+    end
+    return nothing
+end
+
+function At_mul_B_chunk!{T <: Float}(
+    xty    :: SharedVector{T},
+    x      :: BEDFile{T},
+    y      :: SharedVector{T},
+    mask_n :: BitArray{1}, 
+    irange :: UnitRange{Int},
+    sy     :: T = sum(y),
+    sminus :: T = sum(y[!mask_n])
 )
     @inbounds for i in irange
         xty[i] = dot(x, y, i, mask_n, sy, sminus) 
@@ -614,6 +694,18 @@ function At_mul_B_chunk!{T <: Float}(
     mask_n :: DenseVector{Int},
     sy      :: T = sum(y),
     sminus  :: T = sum(y[mask_n .== 0])
+)
+    At_mul_B_chunk!(xty, x, y, mask_n, localindexes(xty), sy, sminus)
+    return nothing
+end
+
+function At_mul_B_chunk!{T <: Float}(
+    xty    :: SharedVector{T},
+    x      :: BEDFile{T},
+    y      :: SharedVector{T},
+    mask_n :: BitArray{1}, 
+    sy     :: T = sum(y),
+    sminus :: T = sum(y[!mask_n])
 )
     At_mul_B_chunk!(xty, x, y, mask_n, localindexes(xty), sy, sminus)
     return nothing
@@ -651,8 +743,34 @@ function Base.At_mul_B!{T <: Float}(
     return nothing
 end
 
+function Base.At_mul_B!{T <: Float}(
+    xty     :: SharedVector{T},
+    x       :: BEDFile{T},
+    y       :: SharedVector{T},
+    mask_n  :: BitArray{1}; 
+    pids    :: Vector{Int} = procs(x),
+    sy      :: T = sum(y),
+    #sminus  :: T = sum(y[mask_n .== 0])
+    sminus  :: T = begin z = !mask_n; sum(y[z]) end
+)
+    # error checking
+    p = size(x,2)
+    p <= length(xty)      || throw(ArgumentError("Attempting to fill argument xty of length $(length(xty)) with $p elements!"))
+    x.geno.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.geno.n) of them!"))
+    pids == procs(xty) == procs(y) == procs(x.geno.x) || throw(ArgumentError("SharedArray arguments to At_mul_B! must be seen by same processes"))
 
-function At_mul_B!{T <: Float}(
+    # each processor will compute its own chunk of x'*y
+    @sync begin
+        for q in procs(xty)
+#            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, mask_n, sy, sminus) 
+            @async remotecall_wait(q, At_mul_B_chunk!, xty, x, y, mask_n, sy, sminus) :: RemoteRef 
+        end
+    end
+    return nothing
+end
+
+
+function Base.At_mul_B!{T <: Float}(
     xty     :: Vector{T},
     x       :: BEDFile{T},
     y       :: Vector{T},
@@ -660,6 +778,27 @@ function At_mul_B!{T <: Float}(
     sy      :: T = sum(y),
     #sminus  :: T = sum(y[mask_n .== 0])
     sminus  :: T = begin z = mask_n .== 0; sum(y[z]) end
+)
+    # error checking
+    p = size(x,2)
+    p <= length(xty)      || throw(ArgumentError("Attempting to fill argument xty of length $(length(xty)) with $p elements!"))
+    x.geno.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.geno.n) of them!"))
+
+    # loop over the desired number of predictors
+    @inbounds for snp = 1:p
+        xty[snp] = dot(x, y, snp, mask_n, sy, sminus) 
+    end
+    return nothing
+end
+
+function Base.At_mul_B!{T <: Float}(
+    xty     :: Vector{T},
+    x       :: BEDFile{T},
+    y       :: Vector{T},
+    mask_n  :: BitArray{1}, 
+    sy      :: T = sum(y),
+    #sminus  :: T = sum(y[mask_n .== 0])
+    sminus  :: T = begin z = !mask_n; sum(y[z]) end
 )
     # error checking
     p = size(x,2)

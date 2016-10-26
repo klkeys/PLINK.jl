@@ -1,7 +1,16 @@
 module PLINK
 
 using StatsFuns: logistic, softplus
-using OpenCL
+### idea from Julia Hoffimann Mendes to conditionally load OpenCL module
+# if no OpenCL library is available, then issue a warning
+# set "cl" variable to Void,
+# then conditionally load GPU code based on value of "cl" 
+try
+    using OpenCL
+catch e
+    warn("PLINK.jl cannot find an OpenCL library and will not load GPU functions correctly.")
+    global cl = nothing
+end
 using DataFrames
 
 import Base.size
@@ -18,7 +27,7 @@ import Base.A_mul_B!
 import Base.At_mul_B!
 #import Base.*
 
-export BEDFile, PlinkGPUVariables
+export BEDFile
 export decompress_genotypes!, decompress_genotypes
 export A_mul_B!, A_mul_B
 export At_mul_B!, At_mul_B
@@ -100,7 +109,9 @@ include("genomatrix.jl")
 include("bedfile.jl")
 include("compression.jl")
 include("decompression.jl")
-include("gpu.jl")
+if cl != nothing
+    include("gpu.jl")
+end
 include("linalg.jl")
 
 end # end module PLINK
