@@ -1,6 +1,6 @@
 module PLINK
 
-using StatsBase: logistic, softplus
+using StatsFuns: logistic, softplus
 using OpenCL
 using DataFrames
 

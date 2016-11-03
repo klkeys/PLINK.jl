@@ -199,7 +199,7 @@ function Base.mean!{T <: Float}(x::BEDFile{T})
     end
 #    y[(x.geno.p+1):end] = vec(mean(x.covar.x,1))
     @inbounds for i = 1:x.covar.p
-        x.means[x.geno.p + i] = mean(sub(x.covar.x, :, i))
+        x.means[x.geno.p + i] = mean(view(x.covar.x, :, i))
     end
     return nothing
 end
@@ -644,7 +644,7 @@ function Base.At_mul_B!{T <: Float}(
     @sync begin
         for q in procs(xty)
 #            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, mask_n, sy, sminus) 
-            @async remotecall_wait(q, At_mul_B_chunk!, xty, x, y, mask_n, sy, sminus) :: RemoteRef 
+            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, mask_n, sy, sminus) :: RemoteRef 
         end
     end
     return nothing
@@ -740,7 +740,7 @@ function Base.At_mul_B!{T <: Float}(
     @sync begin
         for q in procs(xty)
 #            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, sy)
-            @async remotecall_wait(q, At_mul_B_chunk!, xty, x, y, sy) :: RemoteRef
+            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, sy) :: RemoteRef
         end
     end
 

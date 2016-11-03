@@ -65,7 +65,7 @@ function BEDFile(
     x2filename :: String,
     mfilename  :: String,
     pfilename  :: String;
-    pids       :: DenseVector{Int} = procs(),
+    pids       :: Vector{Int} = procs(),
     header     :: Bool = false
 )
     x = GenoMatrix(filename, tfilename, n, p, blocksize, tblocksize, pids=pids) :: GenoMatrix{T}
@@ -86,7 +86,7 @@ function BEDFile(
     x2filename :: String,
     mfilename  :: String,
     pfilename  :: String;
-    pids       :: DenseVector{Int} = procs(), 
+    pids       :: Vector{Int} = procs(), 
     header     :: Bool = false
 )
     BEDFile(Float64, filename, tfilename, n, p, blocksize, tblocksize, x2filename, mfilename, pfilename, pids=pids, header=header) :: BEDFile{Float64}
@@ -102,7 +102,7 @@ function BEDFile(
     x2filename :: String,
     mfilename  :: String,
     pfilename  :: String;
-    pids       :: DenseVector{Int} = procs(),
+    pids       :: Vector{Int} = procs(),
     header     :: Bool = false
 )
     blocksize  = ( (n-1) >>> 2) + 1
@@ -119,7 +119,7 @@ function BEDFile(
     x2filename :: String,
     mfilename  :: String,
     pfilename  :: String;
-    pids       :: DenseVector{Int} = procs(), 
+    pids       :: Vector{Int} = procs(), 
     header     :: Bool = false
 )
     BEDFile(Float64, filename, tfilename, n, p, xtfilename, mfilename, pfilename, pids=pids, header=header) :: BEDFile{Float64}
@@ -134,7 +134,7 @@ end
 #    T         :: Type, 
 #    filename  :: String, 
 #    tfilename :: String; 
-#    pids      :: DenseVector{Int} = procs()
+#    pids      :: Vector{Int} = procs()
 #)
 #
 #    # can easily create GenoMatrix
@@ -166,7 +166,7 @@ end
 #function BEDFile(
 #    filename  :: String,
 #    tfilename :: String; 
-#    pids      :: DenseVector{Int} = procs()
+#    pids      :: Vector{Int} = procs()
 #)
 #    BEDFile(Float64, filename, tfilename, pids=pids) :: BEDFile{Float64}
 #end
@@ -179,7 +179,7 @@ function BEDFile(
     filename   :: String, 
     tfilename  :: String, 
     x2filename :: String; 
-    pids       :: DenseVector{Int} = procs(),
+    pids       :: Vector{Int} = procs(),
     header     :: Bool = false, 
 )
     # making matrices is easy
@@ -208,7 +208,7 @@ function BEDFile(
     # if we have a column with everything equal to the first element of column,
     # then change the mean/prec for that covariate to 0/1
     for i = 1:z.covar.p
-        if all(sub(z.covar.x, :, i) .== z.covar.x[1,i])
+        if all(view(z.covar.x, :, i) .== z.covar.x[1,i])
             z.means[z.geno.p + i] = zero(T)
             z.precs[z.geno.p + i] = one(T)
         end
@@ -223,7 +223,7 @@ function BEDFile(
     tfilename  :: String, 
     x2filename :: String; 
     header     :: Bool = false, 
-    pids       :: DenseVector{Int} = procs()
+    pids       :: Vector{Int} = procs()
 )
     BEDFile(Float64, filename, tfilename, x2filename, header=header, pids=pids) :: BEDFile{Float64}
 end
@@ -236,7 +236,7 @@ function BEDFile(
     x2filename :: String,
     mfilename  :: String,
     pfilename  :: String; 
-    pids       :: DenseVector{Int} = procs(),
+    pids       :: Vector{Int} = procs(),
     header     :: Bool = false, 
 )
     # making matrices is easy
@@ -261,7 +261,7 @@ function BEDFile(
     x2filename :: String,
     mfilename  :: String,
     pfilename  :: String; 
-    pids       :: DenseVector{Int} = procs(),
+    pids       :: Vector{Int} = procs(),
     header     :: Bool = false, 
 )
     BEDFile(Float64, filename, tfilename, x2filename, mfilename, pfilename, header=header, pids=pids) :: BEDFile{Float64}
@@ -273,7 +273,7 @@ function BEDFile(
     T          :: Type,
     filename   :: String,
     x2filename :: String;
-    pids       :: DenseVector{Int} = procs(),
+    pids       :: Vector{Int} = procs(),
     header     :: Bool = false
 )
     # find n from the corresponding FAM file
@@ -304,7 +304,7 @@ function BEDFile(
     # if we have a column with everything equal to the first element of column,
     # then change the mean/prec for that covariate to 0/1
     for i = 1:x.covar.p
-        if all(sub(x.covar.x, :, i) .== x.covar.x[1,i])
+        if all(view(x.covar.x, :, i) .== x.covar.x[1,i])
             x.means[x.geno.p + i] = zero(T)
             x.precs[x.geno.p + i] = one(T)
         end
@@ -321,7 +321,7 @@ function BEDFile(
 end
 
 # default type for previous constructor is Float64
-BEDFile(filename::String, x2filename::String; pids::DenseVector{Int} = procs(), header::Bool = false) = BEDFile(Float64, filename, x2filename, pids=pids, header=header) :: BEDFile{Float64} 
+BEDFile(filename::String, x2filename::String; pids::Vector{Int} = procs(), header::Bool = false) = BEDFile(Float64, filename, x2filename, pids=pids, header=header) :: BEDFile{Float64} 
 
 # another ambitious construtor that only uses the location of the BED file
 # unlike previous constructors, the default covariate is a vector of ones
@@ -329,7 +329,7 @@ BEDFile(filename::String, x2filename::String; pids::DenseVector{Int} = procs(), 
 function BEDFile(
     T        :: Type,
     filename :: String;
-    pids     :: DenseVector{Int} = procs()
+    pids     :: Vector{Int} = procs()
 )
     # make a temporary covariate file
     tmpcovar = ENV["TMPDIR"] * "x_$(myid()).txt" 
@@ -347,7 +347,7 @@ function BEDFile(
 end
 
 # default type for previous constructor is Float64
-BEDFile(filename::String; pids::DenseVector{Int} = procs()) = BEDFile(Float64, filename, pids=pids) :: BEDFile{Float64} 
+BEDFile(filename::String; pids::Vector{Int} = procs()) = BEDFile(Float64, filename, pids=pids) :: BEDFile{Float64} 
 
 function display(x::BEDFile)
     println("A BEDFile object with the following features:")

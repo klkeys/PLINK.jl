@@ -67,7 +67,7 @@ function PlinkGPUVariables{T <: Float}(
     z      :: DenseVector{T},
     x      :: BEDFile{T},
     y      :: DenseVector{T},
-    kern   :: String      = readall(open(expanduser("/.julia/v0.4/PLINK/src/kernels/iht_kernels64.cl"))),
+    kern   :: String = PLINK.gpucode64, 
     mask_n :: DenseVector{Int} = ones(Int, size(y))
 )
     n,p         = size(x.geno)
@@ -189,22 +189,27 @@ end
 # wrapper functions for At_mul_B!
 function copy_y!{T <: Float}(v::PlinkGPUVariables{T}, y::SharedVector{T})
     cl.copy!(v.queue, v.y_buff, sdata(y)) :: cl.NannyEvent
+    #cl.queue(cl.copy!, v.y_buff, sdata(y)) :: cl.NannyEvent
 end
 
 function reset_x!{T <: Float}(v::PlinkGPUVariables{T})
     cl.call(v.queue, v.reset_x, (v.wg_size*v.r_chunks,1,1), nothing, v.red_buff, v.r_length32, zero(T)) :: cl.Event
+    #cl.queue(v.reset_x, (v.wg_size*v.r_chunks,1,1), nothing, v.red_buff, v.r_length32, zero(T)) :: cl.Event
 end
 
 function xty!{T <: Float}(v::PlinkGPUVariables{T})
     cl.call(v.queue, v.xtyk, (v.wg_size*v.y_chunks, v.p, 1), (v.wg_size, 1, 1), v.n32, v.p32, v.y_chunks32, v.blocksize32, v.wg_size32, v.x_buff, v.red_buff, v.y_buff, v.m_buff, v.p_buff, v.mask_buff, v.genofloat) :: cl.Event
+    #cl.queue(v.xtyk, (v.wg_size*v.y_chunks, v.p, 1), (v.wg_size, 1, 1), v.n32, v.p32, v.y_chunks32, v.blocksize32, v.wg_size32, v.x_buff, v.red_buff, v.y_buff, v.m_buff, v.p_buff, v.mask_buff, v.genofloat) :: cl.Event
 end
 
 function xty_reduce!{T <: Float}(v::PlinkGPUVariables{T})
     cl.call(v.queue, v.rxtyk, (v.wg_size,v.p,1), (v.wg_size,1,1), v.n32, v.y_chunks32, v.y_blocks32, v.wg_size32, v.red_buff, v.df_buff, v.genofloat) :: cl.Event
+    #cl.queue(v.rxtyk, (v.wg_size,v.p,1), (v.wg_size,1,1), v.n32, v.y_chunks32, v.y_blocks32, v.wg_size32, v.red_buff, v.df_buff, v.genofloat) :: cl.Event
 end
 
 function copy_xty!{T <: Float}(xty::DenseVector{T}, v::PlinkGPUVariables{T})
     cl.copy!(v.queue, sdata(xty), v.df_buff) :: cl.NannyEvent
+    #cl.queue(cl.copy!, sdata(xty), v.df_buff) :: cl.NannyEvent
 end
 
 """
