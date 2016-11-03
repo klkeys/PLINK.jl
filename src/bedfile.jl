@@ -290,7 +290,8 @@ function BEDFile(
     # use Julia temporary directory for transpose
     # here we call our PLINK utility to transpose the file
     tmppath = ENV["TMPDIR"] * "tbed_$(myid()).bed" 
-    plinkpath = expanduser("~/.julia/v0.4/PLINK/utils/./plink_data")
+    vernum  = "v$(VERSION.major).$(VERSION.minor)"
+    plinkpath = expanduser("~/.julia/$vernum/PLINK/utils/./plink_data")
     run(`$plinkpath $filename $p $n --transpose $tmppath`)
 
     # create a BEDFile object 

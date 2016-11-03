@@ -5,7 +5,7 @@ immutable CovariateMatrix{T <: Float} <: AbstractArray{T, 2}
     xt :: SharedMatrix{T} 
     h  :: Vector{String} # header 
 
-    CovariateMatrix(x::SharedMatrix{T}, p::Int, xt::SharedMatrix{T}, h::String) = new(x,p,xt,h)
+    CovariateMatrix(x::SharedMatrix{T}, p::Int, xt::SharedMatrix{T}, h::Vector{String}) = new(x,p,xt,h)
 end
 
 ### 22 Sep 2016: not needed in Julia v0.5?
