@@ -1,6 +1,6 @@
 module PLINK
 
-using StatsFuns: logistic, softplus
+using StatsFuns
 ### idea from Julia Hoffimann Mendes to conditionally load OpenCL module
 # if no OpenCL library is available, then issue a warning
 # set "cl" variable to Void,
