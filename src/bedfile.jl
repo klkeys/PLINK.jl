@@ -208,7 +208,7 @@ function BEDFile(
     # if we have a column with everything equal to the first element of column,
     # then change the mean/prec for that covariate to 0/1
     for i = 1:z.covar.p
-        if all(sub(z.covar.x, :, i) .== z.covar.x[1,i])
+        if all(view(z.covar.x, :, i) .== z.covar.x[1,i])
             z.means[z.geno.p + i] = zero(T)
             z.precs[z.geno.p + i] = one(T)
         end
@@ -305,7 +305,7 @@ function BEDFile(
     # if we have a column with everything equal to the first element of column,
     # then change the mean/prec for that covariate to 0/1
     for i = 1:x.covar.p
-        if all(sub(x.covar.x, :, i) .== x.covar.x[1,i])
+        if all(view(x.covar.x, :, i) .== x.covar.x[1,i])
             x.means[x.geno.p + i] = zero(T)
             x.precs[x.geno.p + i] = one(T)
         end

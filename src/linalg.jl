@@ -479,7 +479,7 @@ function Base.A_mul_B!{T <: Float}(
     idx    :: BitArray{1},
     k      :: Int,
     mask_n :: DenseVector{Int};
-    pids   :: Vector{Int} = procs(),
+#    pids   :: Vector{Int} = procs(),
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
@@ -504,7 +504,7 @@ function Base.A_mul_B!{T <: Float}(
     idx    :: BitArray{1},
     k      :: Int,
     mask_n :: BitArray{1}; 
-    pids   :: Vector{Int} = procs(),
+#    pids   :: Vector{Int} = procs(x),
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
@@ -548,14 +548,14 @@ function Base.A_mul_B!{T <: Float}(
     b    :: DenseVector{T},
     idx  :: BitArray{1},
     k    :: Int;
-    pids :: Vector{Int} = procs(),
+#    pids :: Vector{Int} = procs(x),
 )
     # error checking
     n = length(xb)
     n == x.geno.n       || throw(ArgumentError("xb has $n rows but x has $(x.geno.n)"))
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
     k >= sum(idx)       || throw(ArgumentError("Must have k <= sum(idx) or X*b will not compute correctly"))
-    pids == procs(xb) == procs(b) == procs(x.geno.xt) || throw(ArgumentError("SharedArray arguments to A_mul_B! must be seen by same processes"))
+#    pids == procs(xb) == procs(b) == procs(x.geno.xt) || throw(ArgumentError("SharedArray arguments to A_mul_B! must be seen by same processes"))
 
     # loop over the desired number of predictors
     @inbounds for case = 1:x.geno.n
@@ -578,7 +578,7 @@ function A_mul_B{T <: Float}(
     idx    :: BitArray{1},
     k      :: Int,
     mask_n :: DenseVector{Int};
-    pids   :: Vector{Int} = procs(),
+#    pids   :: Vector{Int} = procs(x),
 )
     xb = SharedArray(T, x.geno.n, init = S -> S[localindexes(S)] = zero(T), pids=pids) :: SharedVector{T}
     A_mul_B!(xb, x, b, idx, k, mask_n, pids=pids)
@@ -624,7 +624,7 @@ function A_mul_B{T <: Float}(
     b    :: SharedVector{T},
     idx  :: BitArray{1},
     k    :: Int;
-    pids :: Vector{Int} = procs(),
+#    pids :: Vector{Int} = procs(x),
 )
     xb = SharedArray(T, x.geno.n, init = S -> S[localindexes(S)] = zero(T), pids=pids) :: SharedVector{T}
     A_mul_B!(xb, x, b, idx, k) 
@@ -659,7 +659,7 @@ function At_mul_B_chunk!{T <: Float}(
     mask_n :: DenseVector{Int},
     irange :: UnitRange{Int},
     sy     :: T = sum(y),
-    sminus :: T = sum(y[mask_n .== 0])
+    sminus :: T = begin z = mask_n .== 0; sum(y[z]) end
 )
     @inbounds for i in irange
         xty[i] = dot(x, y, i, mask_n, sy, sminus) 
@@ -692,8 +692,8 @@ function At_mul_B_chunk!{T <: Float}(
     x      :: BEDFile{T},
     y      :: SharedVector{T},
     mask_n :: DenseVector{Int},
-    sy      :: T = sum(y),
-    sminus  :: T = sum(y[mask_n .== 0])
+    sy     :: T = sum(y),
+    sminus :: T = begin z = mask_n .== 0; sum(y[z]) end
 )
     At_mul_B_chunk!(xty, x, y, mask_n, localindexes(xty), sy, sminus)
     return nothing
@@ -737,7 +737,7 @@ function Base.At_mul_B!{T <: Float}(
     @sync begin
         for q in procs(xty)
 #            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, mask_n, sy, sminus) 
-            @async remotecall_wait(q, At_mul_B_chunk!, xty, x, y, mask_n, sy, sminus) :: RemoteRef 
+            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, mask_n, sy, sminus)
         end
     end
     return nothing
@@ -763,7 +763,7 @@ function Base.At_mul_B!{T <: Float}(
     @sync begin
         for q in procs(xty)
 #            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, mask_n, sy, sminus) 
-            @async remotecall_wait(q, At_mul_B_chunk!, xty, x, y, mask_n, sy, sminus) :: RemoteRef 
+            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, mask_n, sy, sminus)
         end
     end
     return nothing
@@ -881,7 +881,7 @@ function Base.At_mul_B!{T <: Float}(
     @sync begin
         for q in procs(xty)
 #            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, sy)
-            @async remotecall_wait(q, At_mul_B_chunk!, xty, x, y, sy) :: RemoteRef
+            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, sy)
         end
     end
 
