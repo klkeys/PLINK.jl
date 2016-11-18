@@ -67,8 +67,8 @@ function PlinkGPUVariables{T <: Float}(
     z      :: DenseVector{T},
     x      :: BEDFile{T},
     y      :: DenseVector{T},
-    kern   :: String      = readall(open(expanduser("/.julia/v0.4/PLINK/src/kernels/iht_kernels64.cl"))),
-    mask_n :: DenseVector{Int} = ones(Int, size(y))
+    kern   :: String      = gpucode64 
+    mask_n :: Vector{Int} = ones(Int, size(y))
 )
     n,p         = size(x.geno)
     wg_size     = 512
@@ -120,7 +120,7 @@ function df_x2!{T <: Float}(
     df      :: DenseVector{T},
     x       :: BEDFile{T},
     y       :: DenseVector{T},
-    mask_n  :: DenseVector{Int}
+    mask_n  :: Vector{Int}
 )
     m = x.means[x.geno.p+snp]
     s = x.precs[x.geno.p+snp]
@@ -137,7 +137,7 @@ function df_x2!{T <: Float}(
     df      :: DenseVector{T},
     x       :: BEDFile{T},
     y       :: DenseVector{T},
-    mask_n  :: DenseVector{Int}
+    mask_n  :: Vector{Int}
 )
     for i = 1:x.covar.p
         df_x2!(i, df, x, y, mask_n)
@@ -224,7 +224,7 @@ function Base.At_mul_B!{T <: Float}(
     xty    :: SharedVector{T},
     x      :: BEDFile{T},
     y      :: SharedVector{T},
-    mask_n :: DenseVector{Int},
+    mask_n :: Vector{Int},
     v      :: PlinkGPUVariables{T}
 )
     copy_y!(v, y)
@@ -246,8 +246,8 @@ function Base.At_mul_B{T <: Float}(
     x      :: BEDFile{T},
     y      :: SharedVector{T},
     v      :: PlinkGPUVariables{T};
-    mask_n :: DenseVector{Int} = ones(Int, size(y)),
-    pids   :: DenseVector{Int} = procs(x),
+    mask_n :: Vector{Int} = ones(Int, size(y)),
+    pids   :: Vector{Int} = procs(x),
 )
     xty = SharedArray(T, (size(x,2),), pids=pids) :: SharedVector{T}
     At_mul_B!(xty, x, y, v) 
