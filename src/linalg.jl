@@ -276,7 +276,7 @@ function prec!{T <: Float}(x::BEDFile{T})
         end
     end
     @inbounds for i = 1:x.covar.p
-        u = one(T) / std(sub(x.covar.x, :, i)) :: T
+        u = (one(T) / std(view(x.covar.x, :, i))) :: T
         x.precs[x.geno.p + i] = u 
     end
     return nothing
