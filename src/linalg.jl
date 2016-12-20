@@ -1,30 +1,36 @@
 """
-    maf(x::BEDFile [, y=zeros(x.n)])
+    maf(x::BEDFile)
 
 This function calculates the *m*inor *a*llele *f*requency for each SNP of a `BEDFile` object `x`.
-
-Arguments:
-
-- `x` is the `BEDFile` object containing the compressed `n` x `p` design matrix.
-
-Optional Arguments:
-
-- `y` is a temporary array to store a column of `x`.
-
-Output:
-
-- A vector `z` of MAFs.
 """
 function maf{T <: Float}(
-    x :: BEDFile{T};
-    y :: DenseVector{Float64} = zeros(Float64,x.geno.n)
+    x :: BEDFile{T}
 )
-    z = zeros(Float64,x.p)
-    @inbounds for i = 1:x.p
-        decompress_genotypes!(y,x,i)
-        z[i] = (min( sum(y .== one(Float64)), sum(y .== -one(Float64))) + sum(y .== zero(Float64))) / (x.n - sum(isnan(y))) / 2
+    z = zeros(T, x.geno.p)
+    #@inbounds for i = 1:x.p
+    #    decompress_genotypes!(y,x,i)
+    #    z[i] = (min( sum(y .== one(Float64)), sum(y .== -one(Float64))) + sum(y .== zero(Float64))) / (x.n - sum(isnan(y))) / 2
+    #end
+    @inbounds for i = 1:x.geno.p
+        z[i] = maf_col(x, i)
     end
     return z
+end
+
+function maf_col{T <: Float}(
+    x   :: BEDFile{T},
+    col :: Int
+)
+    alleles = 0
+    obs     = 0
+    for i = 1:x.n
+        dosage = x[i,col]
+        if dosage < 3
+            alleles += dosage
+            obs += 1
+        end
+    end
+    return alleles / obs 
 end
 
 
