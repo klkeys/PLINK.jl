@@ -7,10 +7,6 @@ function maf{T <: Float}(
     x :: BEDFile{T}
 )
     z = zeros(T, x.geno.p)
-    #@inbounds for i = 1:x.p
-    #    decompress_genotypes!(y,x,i)
-    #    z[i] = (min( sum(y .== one(Float64)), sum(y .== -one(Float64))) + sum(y .== zero(Float64))) / (x.n - sum(isnan(y))) / 2
-    #end
     @inbounds for i = 1:x.geno.p
         z[i] = maf_col(x, i)
     end
@@ -23,14 +19,14 @@ function maf_col{T <: Float}(
 )
     alleles = 0
     obs     = 0
-    for i = 1:x.n
-        dosage = x[i,col]
-        if dosage < 3
-            alleles += dosage
+    for i = 1:x.geno.n
+        dosage = x.geno[i,col]
+        if dosage != 1 
+            alleles += genofloat[dosage + ONE8]
             obs += 1
         end
     end
-    return alleles / obs 
+    return alleles / (2*obs) 
 end
 
 
