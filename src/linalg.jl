@@ -1,5 +1,38 @@
 """
-    maf(x::BEDFile)
+    mac(x::BEDFile) -> Vector{Int}
+
+This function calculates the *m*inor *a*llele *c*ounts for each SNP of a `BEDFile` object `x`.
+`mac` is similar to `maf` since it counts minor alleles, but it does not return the ratios of observed alleles. 
+"""
+function mac{T <: Float}(
+    x :: BEDFile{T}
+)
+    z = zeros(Int, x.geno.p)
+    @inbounds for i = 1:x.geno.p
+        z[i] = mac_col(x, i)
+    end
+    return z
+end
+
+function mac_col{T <: Float}(
+    x   :: BEDFile{T},
+    col :: Int
+)
+    alleles = 0
+    #obs     = 0
+    for i = 1:x.geno.n
+        dosage = x.geno[i,col]
+        if dosage != 1 
+            alleles += genoint[dosage + ONE8] 
+            #obs += 1
+        end
+    end
+    return alleles
+end
+
+
+"""
+    maf(x::BEDFile) -> Vector{Float}
 
 This function calculates the *m*inor *a*llele *f*requency for each SNP of a `BEDFile` object `x`.
 """

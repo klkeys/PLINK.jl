@@ -94,6 +94,7 @@ Thus, the map in PLINK.jl is slightly different:
 - **01 -> 1 -> NaN** 
 """
 const genofloat = [0.0, NaN, 1.0, 2.0]
+const genoint   = [0 -99 1 2]
 
 # dictionaries used in compression to convert floating point numbers to Int8 numbers
 const bin32  = Dict{Float32, Int8}(0.0f0 => ZERO8, NaN32 => ONE8, 1.0f0 => TWO8, 2.0f0 => THREE8)
