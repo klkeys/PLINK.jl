@@ -1,19 +1,88 @@
+### functions to compute missingness
 """
-    mac(x::BEDFile) -> Vector{Int}
+    missing_chunk!(x::BEDFile, irange)
 
-This function calculates the *m*inor *a*llele *c*ounts for each SNP of a `BEDFile` object `x`.
-`mac` is similar to `maf` since it counts minor alleles, but it does not return the ratios of observed alleles. 
+A parallel execution kernel for calculating a subset of the missingness of the _genotype predictors_ of `x`.
 """
-function mac{T <: Float}(
-    x :: BEDFile{T}
-)
-    z = zeros(Int, x.geno.p)
-    @inbounds for i = 1:x.geno.p
-        z[i] = mac_col(x, i)
+function missing_chunk!{T <: Float}(y::DenseVector{T}, x::BEDFile{T}, irange::UnitRange{Int})
+    for i in irange
+        y[i] = missing_col(x, i)
     end
-    return z
+    return y
 end
 
+"""
+    missing_chunk!(x::BEDFile)
+
+A convenience wrapper for `missing_chunk!(y, x, irange)` that automatically chooses local indexes for `irange`.
+"""
+missing_chunk!{T <: Float}(y::DenseVector{T}, x::BEDFile{T}) = missing_chunk!(y, x, localindexes(y))
+
+"""
+    missing_col(x::BEDFile, snp::Int)
+    
+Compute the missing of one `snp` column of a `BEDFile` object `x`. 
+"""
+function missing_col{T <: Float}(
+    x   :: BEDFile{T},
+    col :: Int
+)
+    alleles = 0 
+    for i = 1:x.geno.n
+        dosage = x.geno[i,col]
+        if dosage == 1 
+            alleles += 1 
+        end
+    end
+    return alleles ./ x.geno.n
+end
+
+"""
+    missing(x::BEDFile) -> Vector{Int}
+
+This function calculates the missingness for each SNP of a `BEDFile` object `x`.
+"""
+function missing{T <: Float}(
+    x :: BEDFile{T}
+)
+    y = SharedArray(T, (x.geno.p,), pids=procs(x)) :: SharedVector{T}
+    @sync begin
+        for q in procs(x)
+            @async remotecall_wait(missing_chunk!, q, y, x)
+        end
+    end
+    return y 
+end
+
+
+### functions for minor allele counts 
+
+"""
+    mac_chunk!(x::BEDFile, irange)
+
+A parallel execution kernel for calculating a subset of the mean allele counts of `x`.
+"""
+function mac_chunk!{T <: Float}(y::DenseVector{Int}, x::BEDFile{T}, irange::UnitRange{Int})
+    for i in irange
+        y[i] = mac_col(x, i)
+    end
+    return y
+end
+
+"""
+    mac_chunk!(x::BEDFile)
+
+A convenience wrapper for `mac_chunk!(y, x, irange)` that automatically chooses local indexes for `irange`.
+"""
+mac_chunk!{T <: Float}(y::DenseVector{Int}, x::BEDFile{T}) = mac_chunk!(y, x, localindexes(y))
+
+
+"""
+    mac_col(x::BEDFile, snp::Int)
+    
+Compute the mean of one `snp` column of a `BEDFile` object `x`. 
+`mac_col` will ignore missing genotype values.
+"""
 function mac_col{T <: Float}(
     x   :: BEDFile{T},
     col :: Int
@@ -30,27 +99,60 @@ function mac_col{T <: Float}(
     return alleles
 end
 
-
 """
-    maf(x::BEDFile) -> Vector{Float}
+    mac(x::BEDFile) -> Vector{Int}
 
-This function calculates the *m*inor *a*llele *f*requency for each SNP of a `BEDFile` object `x`.
+This function calculates the *m*inor *a*llele *c*ounts for each SNP of a `BEDFile` object `x`.
+`mac` is similar to `maf` since it counts minor alleles, but it does not return the ratios of observed alleles. 
 """
-function maf{T <: Float}(
+function mac{T <: Float}(
     x :: BEDFile{T}
 )
-    z = zeros(T, x.geno.p)
-    @inbounds for i = 1:x.geno.p
-        z[i] = maf_col(x, i)
+    #z = zeros(Int, x.geno.p)
+    #@inbounds for i = 1:x.geno.p
+    #    z[i] = mac_col(x, i)
+    #end
+    y = SharedArray(Int, (x.geno.p,), pids=procs(x)) :: SharedVector{Int}
+    @sync begin
+        for q in procs(x)
+            @async remotecall_wait(mac_chunk!, q, y, x)
+        end
     end
-    return z
+    return y 
 end
 
+
+"""
+    maf_chunk(y::DenseVector{T}, x::BEDFile, irange)
+
+A parallel execution kernel for calculating a subset of the mean allele counts of `x`.
+"""
+function maf_chunk!{T <: Float}(y::DenseVector{T}, x::BEDFile{T}, irange::UnitRange{Int})
+    for i in irange
+        y[i] = maf_col(x, i)
+    end
+    return y
+end
+
+"""
+    maf_chunk!(x::BEDFile)
+
+A convenience wrapper for `maf_chunk!(q, x, irange)` that automatically chooses local indexes for `irange`.
+"""
+maf_chunk!{T <: Float}(y::DenseVector{T}, x::BEDFile{T}) = maf_chunk!(y, x, localindexes(y))
+
+
+"""
+    maf_col(x::BEDFile, snp::Int)
+    
+Compute the minor allele frequency of one `snp` column of a `BEDFile` object `x`. 
+`maf_col` will ignore missing genotype values.
+"""
 function maf_col{T <: Float}(
     x   :: BEDFile{T},
     col :: Int
 )
-    alleles = 0
+    alleles = zero(T) 
     obs     = 0
     for i = 1:x.geno.n
         dosage = x.geno[i,col]
@@ -62,9 +164,31 @@ function maf_col{T <: Float}(
     return alleles / (2*obs) 
 end
 
+"""
+    maf(x::BEDFile) -> Vector{Float}
+
+This function calculates the *m*inor *a*llele *f*requency for each SNP of a `BEDFile` object `x`.
+"""
+function maf{T <: Float}(
+    x :: BEDFile{T}
+)
+    #z = zeros(T, x.geno.p)
+    #@inbounds for i = 1:x.geno.p
+    #    z[i] = maf_col(x, i)
+    #end
+    y = SharedArray(T, (x.geno.p,)) :: SharedVector{T}
+    @sync begin
+        for q in procs(x)
+            @async remotecall_wait(maf_chunk!, q, y, x)
+        end
+    end
+    return y 
+end
+
+
 
 """
-    sumsq_snp(x, snp)
+    sumabs2_snp(x, snp)
 
 This function efficiently computes the squared L2 (Euclidean) norm of column `snp` of a `BEDFile` object `x`, i.e. sumabs2(x[:,snp]).
 
@@ -73,7 +197,7 @@ Arguments:
 - `x` is the `BEDFile` object containing the compressed `n` x `p` design matrix.
 - `snp` is the current SNP (column) to use in calculations.
 """
-function sumsq_snp{T <: Float}(x::BEDFile{T}, snp::Int)
+function sumabs2_snp{T <: Float}(x::BEDFile{T}, snp::Int)
     s = zero(T)       # accumulation variable, will eventually equal dot(y,z)
     t = zero(T)       # temp variable, output of interpret_genotype
     m = x.means[snp]
@@ -91,7 +215,7 @@ end
 
 
 """
-    sumsq_covariate(x, covariate) 
+    sumabs2_covariate(x, covariate) 
 
 This function efficiently computes the squared L2 (Euclidean) norm of a covariate of a `BEDFile` object `x`, i.e. sumabs2(x[:,covariate]).
 
@@ -116,7 +240,7 @@ end
 
 
 """
-    sumsq(y, x)
+    sumabs2!(y, x)
 
 Compute the squared L2 norm of each column of a compressed matrix `x` and save it to a vector `y`.
 
@@ -125,7 +249,7 @@ Arguments:
 - `y` is the vector to fill with the squared norms.
 - `x` is the `BEDFile` object that contains the compressed `n` x `p` design matrix from which to draw the columns.
 """
-function sumsq!{T <: Float}(y::DenseVector{T}, x::BEDFile{T})
+function Base.sumabs2!{T <: Float}(y::DenseVector{T}, x::BEDFile{T})
     p = size(x,2)
     p == length(y) || throw(DimensionMismatch("y has $(length(y)) rows, x has $p columns"))
     @inbounds for snp = 1:x.geno.p
@@ -139,7 +263,7 @@ end
 
 
 """
-    sumsq(x::BEDFile [, shared=true, pids=procs()]) 
+    sumabs2(x::BEDFile [, shared=true, pids=procs()]) 
 
 Compute the squared L2 norm of each column of a compressed matrix `x`.
 
@@ -151,14 +275,14 @@ Optional Arguments:
 - `shared` is a `Bool` indicating whether or not to output a `SharedArray`. Defaults to `true`.
 - `pids` is a vector of process IDs to which the output `SharedArray` will be distributed. Defaults to `procs()`. Has no effect when `shared = false`.
 """
-function sumsq{T <: Float}(
+function Base.sumabs2{T <: Float}(
     x       :: BEDFile{T};
     shared  :: Bool = true,
-    pids    :: Vector{Int} = procs(),
+    pids    :: Vector{Int} = procs(x),
 )
     p = size(x,2)
     y = ifelse(shared, SharedArray(T, p, init = S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, p))
-    sumsq!(y,x)
+    sumabs2!(y,x)
     return y
 end
 

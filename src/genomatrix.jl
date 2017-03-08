@@ -21,20 +21,21 @@ function GenoMatrix(
     p          :: Int,
     blocksize  :: Int,
     tblocksize :: Int;
-    pids       :: DenseVector{Int} = procs(),
+    pids       :: Vector{Int} = procs(),
 )
     # find SNP ids from the corresponding BIM file
     # first create filepath to BIM file
     bimfile = filename[1:(endof(filename)-3)] * "bim"
 
     # specify column element types of BIM file 
-    eltypes = [Int, String, Int, Int, String, String]
+    #eltypes = [Int, String, Int, Int, String, String]
 
     # load BIM
-    df = readtable(bimfile, header = false, separator = '\t', eltypes = eltypes)
+    #df = readtable(bimfile, header = false, separator = '\t', eltypes = eltypes)
 
     # second column of BIM file contains the SNP ids
-    snpids = convert(Vector{String}, df[:x2]) :: Vector{String} 
+    #snpids = convert(Vector{String}, df[:x2]) :: Vector{String} 
+    snpids = convert(Vector{String}, split(chomp(readstring(`awk -F " " '{print $2}' $bimfile`)), '\n', keep=false))
     
     x = GenoMatrix(
         read_bedfile(filename, pids=pids), 
@@ -50,7 +51,7 @@ function GenoMatrix(
     tfilename :: String,
     n         :: Int,
     p         :: Int;
-    pids      :: DenseVector{Int} = procs()
+    pids      :: Vector{Int} = procs()
 )
     blocksize  = ( (n-1) >>> 2) + 1
     tblocksize = ( (p-1) >>> 2) + 1
@@ -62,7 +63,7 @@ end
 function GenoMatrix(
     filename  :: String,
     tfilename :: String;
-    pids      :: DenseVector{Int} = procs()
+    pids      :: Vector{Int} = procs()
 )
     # find n from the corresponding FAM file
     famfile = filename[1:(endof(filename)-3)] * "fam"
@@ -111,7 +112,7 @@ isequal(x::GenoMatrix, y::GenoMatrix) = x == y
 # important matrix indexing! returns the Int8 
 function getindex(
     X   :: GenoMatrix,
-    x   :: DenseVector{Int8},
+    x   :: SharedVector{Int8},
     row :: Int,
     col :: Int
 )
@@ -125,7 +126,7 @@ end
 # used for dott()
 function getindex_t(
     X   :: GenoMatrix,
-    x   :: DenseVector{Int8},
+    x   :: SharedVector{Int8},
     row :: Int,
     col :: Int
 )
@@ -166,7 +167,7 @@ Output:
 function read_bedfile(
     filename  :: String; 
     transpose :: Bool = false, 
-    pids      :: DenseVector{Int} = procs()
+    pids      :: Vector{Int} = procs()
 )
 
     # check that file is BED file
@@ -189,11 +190,10 @@ function read_bedfile(
     # file seems to be a true BED file
     # will close filestream and slurp entire file into SharedArray
 #    close(xstream)
-    x = SharedArray(abspath(filename), Int8, (nbytes-3,), 3, pids=pids)
+    x = SharedArray(abspath(filename), Int8, (nbytes-3,), 3, pids=pids) :: SharedVector{Int8}
 
     # return the genotypes
-#   return x[4:end]
-    return x :: SharedVector{Int8}
+    return x
 end
 
 function display(x::GenoMatrix) 
