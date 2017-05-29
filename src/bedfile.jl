@@ -1,4 +1,4 @@
-immutable BEDFile{T <: Float}
+immutable BEDFile{T <: Float} <: AbstractMatrix{T}
     geno  :: GenoMatrix
     covar :: CovariateMatrix{T}
     means :: SharedVector{T}
@@ -7,7 +7,7 @@ end
 
 BEDFile{T <: Float}(geno::GenoMatrix, covar::CovariateMatrix, means::SharedVector{T}, precs::SharedVector{T}) = BEDFile{eltype(covar)}(geno, covar, means, precs)
 
-# subroutines
+# subroutines for AbstractMatrix type
 Base.size(x::BEDFile) = (x.geno.n, x.geno.p + x.covar.p)
 Base.size(x::BEDFile, d::Int) = d == 1? x.geno.n : size(x.geno, d) + size(x.covar, 2) 
 
@@ -46,6 +46,16 @@ function getindex{T <: Float}(
     col > x.geno.p && return getindex(x.covar, row, col-x.geno.p)
     return int2geno(x, x.geno[row, col])
 end
+
+# matrix manipulations
+# what to do about transpose in CovariateMatrix?
+function setindex!{T <: Float}(x::BEDFile{T}, v, i::Int)
+    i <= x.p && throw(ArgumentError("Cannot index into genotype array of BEDFile object since it is read-only"))
+    setindex!(x.x, v, i-x.p)
+end
+
+typeof(x::BEDFile) = "$(x.n)x$(size(x,2)) BEDFile{$(eltype(x.x))} with $(x.p2) nongenetic covariates"
+summary(x::BEDFile) = typeof(x) 
 
 # get names of all predictors 
 prednames(x::BEDFile) = [x.geno.snpids; x.covar.h] 
