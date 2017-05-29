@@ -9,7 +9,7 @@ BEDFile{T <: Float}(geno::GenoMatrix, covar::CovariateMatrix, means::SharedVecto
 
 # subroutines for AbstractMatrix type
 Base.size(x::BEDFile) = (x.geno.n, x.geno.p + x.covar.p)
-Base.size(x::BEDFile, d::Int) = d == 1? x.geno.n : size(x.geno, d) + size(x.covar, 2) 
+Base.size(x::BEDFile, d::Int) = d == 1? x.geno.n : size(x.geno, 2) + size(x.covar, 2) 
 
 Base.eltype(x::BEDFile) = eltype(x.covar)
 

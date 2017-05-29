@@ -21,7 +21,7 @@ end
 function CovariateMatrix(
     T        :: Type, 
     filename :: String;
-    pids     :: DenseVector{Int} = procs(),
+    pids     :: Vector{Int} = procs(),
     header   :: Bool = false
 )
     # first load data
@@ -30,15 +30,15 @@ function CovariateMatrix(
         h = convert(Vector{String}, h) :: Vector{String}
     else
         x_temp = readdlm(filename, T, header=false) :: Matrix{T}
-        h = convert(Vector{String}, ["V" * "$i" for i = 1:size(x_temp,2)]) :: Vector{String}
+        h = ["V" * "$i" for i = 1:size(x_temp,2)] :: Vector{String}
     end
 
     # make SharedArray container for x_temp
-    x = SharedArray(T, size(x_temp), init = S -> localindexes(S) = zero(T), pids=pids) :: SharedMatrix{eltype(x_temp)}
+    x = SharedArray(T, size(x_temp), pids=pids) :: SharedMatrix{eltype(x_temp)}
     copy!(x, x_temp)
 
     # do same for x'
-    xt = SharedArray(T, reverse(size(x_temp)), init = S -> localindexes(S) = zero(T), pids=pids) :: SharedMatrix{eltype(x_temp)}
+    xt = SharedArray(T, reverse(size(x_temp)), pids=pids) :: SharedMatrix{eltype(x_temp)}
     transpose!(xt, x_temp)
 
     # save p for convenience
@@ -50,7 +50,7 @@ end
 # default to Float64 constructor
 function CovariateMatrix(
     filename :: String;
-    pids     :: DenseVector{Int} = procs(),
+    pids     :: Vector{Int} = procs(),
     header   :: Bool = false
 )
     CovariateMatrix(Float64, filename, pids=pids, header=header) :: CovariateMatrix{Float64}
@@ -68,7 +68,7 @@ Base.endof(x::CovariateMatrix) = length(x.x)
 
 Base.eltype(x::CovariateMatrix) = eltype(x.x) 
 
-Base.linearindexing(::Type{CovariateMatrix}) = Base.LinearSlow()
+Base.linearindexing(::Type{CovariateMatrix}) = Base.LinearFast()
 
 # here we annotate return value with type of x
 # this hack is **VERY** important for efficient indexing x from a BEDFile!
