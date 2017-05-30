@@ -3,9 +3,10 @@ immutable BEDFile{T <: Float} <: AbstractMatrix{T}
     covar :: CovariateMatrix{T}
     means :: SharedVector{T}
     precs :: SharedVector{T}
+    mask  :: Vector{Int}
 end
 
-BEDFile{T <: Float}(geno::GenoMatrix, covar::CovariateMatrix, means::SharedVector{T}, precs::SharedVector{T}) = BEDFile{eltype(covar)}(geno, covar, means, precs)
+BEDFile{T <: Float}(geno::GenoMatrix, covar::CovariateMatrix, means::SharedVector{T}, precs::SharedVector{T}, mask::Vector{Int}) = BEDFile{eltype(covar)}(geno, covar, means, precs, mask)
 
 # subroutines for AbstractMatrix type
 Base.size(x::BEDFile) = (x.geno.n, x.geno.p + x.covar.p)
@@ -15,7 +16,7 @@ Base.eltype(x::BEDFile) = eltype(x.covar)
 
 Base.ndims(x::BEDFile) = 2
 
-Base.copy(x::BEDFile) = BEDFile(x.geno, x.covar, x.means, x.precs)
+Base.copy(x::BEDFile) = BEDFile(x.geno, x.covar, x.means, x.precs, x.mask)
 
 function ==(x::BEDFile, y::BEDFile)
      x.geno == y.geno  && 
@@ -82,7 +83,7 @@ function BEDFile(
     y = CovariateMatrix(T,x2filename, pids=pids, header=header) :: CovariateMatrix{T}
     m = SharedArray(abspath(mfilename), T, (x.p + y.p,), pids=pids) :: SharedVector{T}
     d = SharedArray(abspath(pfilename), T, (x.p + y.p,), pids=pids) :: SharedVector{T}
-    return BEDFile{T}(x,y,m,d)
+    return BEDFile{T}(x,y,m,d,ones(Int,x.n))
 end
 
 # set default type for previous constructor to Float64
@@ -205,12 +206,9 @@ function BEDFile(
     d = SharedArray(T, (x.p + y.p,), init = S -> localindexes(S) = one(T),  pids=pids) :: SharedVector{T}
 
     # construct BEDFile
-    z = BEDFile{T}(x,y,m,d) 
+    z = BEDFile{T}(x,y,m,d,ones(Int,x.n)) 
 
     # compute means, precisions
-#    # since we have a single covariate of all `a`, set the final mean/prec to 0/1
-#    mean!(z); z.means[end] = zero(T)
-#    prec!(z); z.precs[end] = one(T)
     mean!(z);
     prec!(z);
 
@@ -261,7 +259,7 @@ function BEDFile(
     m = SharedArray(abspath(mfilename), T, (p,), pids=pids) :: SharedVector{T}
     d = SharedArray(abspath(pfilename), T, (p,), pids=pids) :: SharedVector{T}
 
-    return BEDFile{T}(x,y,m,d) 
+    return BEDFile{T}(x,y,m,d,ones(Int,x.n)) 
 end
 
 # set default type for previous constructor to Float64
@@ -294,9 +292,6 @@ function BEDFile(
     bimfile = filename[1:(endof(filename)-3)] * "bim"
     p       = countlines(bimfile)
 
-#    # use Desktop as a temporary directory for transpose
-#    # here we call our PLINK utility to transpose the file
-#    tmppath = expanduser("~/Desktop/tbed_$(myid()).bed")
     # use Julia temporary directory for transpose
     # here we call our PLINK utility to transpose the file
     tmppath = ENV["TMPDIR"] * "tbed_$(myid()).bed" 
@@ -320,10 +315,6 @@ function BEDFile(
             x.precs[x.geno.p + i] = one(T)
         end
     end
-
-#    # covariate mean/precision must be 0.0/1.0 
-#    x.means[end] = zero(T)
-#    x.precs[end] = one(T)
 
     # delete temporary files before returning
     rm(tmppath)

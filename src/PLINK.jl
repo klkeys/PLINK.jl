@@ -25,6 +25,7 @@ import Base.display
 import Base.convert
 import Base.A_mul_B!
 import Base.At_mul_B!
+import Base.setindex!
 #import Base.*
 
 export BEDFile

@@ -20,18 +20,18 @@ missing_chunk!{T <: Float}(y::DenseVector{T}, x::BEDFile{T}) = missing_chunk!(y,
 
 """
     missing_col(x::BEDFile, snp::Int)
-    
-Compute the missing of one `snp` column of a `BEDFile` object `x`. 
+   
+Compute the missing of one `snp` column of a `BEDFile` object `x`.
 """
 function missing_col{T <: Float}(
     x   :: BEDFile{T},
     col :: Int
 )
-    alleles = 0 
+    alleles = 0
     for i = 1:x.geno.n
         dosage = x.geno[i,col]
-        if dosage == 1 
-            alleles += 1 
+        if dosage == 1
+            alleles += 1
         end
     end
     return alleles ./ x.geno.n
@@ -51,11 +51,11 @@ function missing{T <: Float}(
             @async remotecall_wait(missing_chunk!, q, y, x)
         end
     end
-    return y 
+    return y
 end
 
 
-### functions for minor allele counts 
+### functions for minor allele counts
 
 """
     mac_chunk!(x::BEDFile, irange)
@@ -79,8 +79,8 @@ mac_chunk!{T <: Float}(y::DenseVector{Int}, x::BEDFile{T}) = mac_chunk!(y, x, lo
 
 """
     mac_col(x::BEDFile, snp::Int)
-    
-Compute the mean of one `snp` column of a `BEDFile` object `x`. 
+   
+Compute the mean of one `snp` column of a `BEDFile` object `x`.
 `mac_col` will ignore missing genotype values.
 """
 function mac_col{T <: Float}(
@@ -91,8 +91,8 @@ function mac_col{T <: Float}(
     #obs     = 0
     for i = 1:x.geno.n
         dosage = x.geno[i,col]
-        if dosage != 1 
-            alleles += genoint[dosage + ONE8] 
+        if dosage != 1
+            alleles += genoint[dosage + ONE8]
             #obs += 1
         end
     end
@@ -103,7 +103,7 @@ end
     mac(x::BEDFile) -> Vector{Int}
 
 This function calculates the *m*inor *a*llele *c*ounts for each SNP of a `BEDFile` object `x`.
-`mac` is similar to `maf` since it counts minor alleles, but it does not return the ratios of observed alleles. 
+`mac` is similar to `maf` since it counts minor alleles, but it does not return the ratios of observed alleles.
 """
 function mac{T <: Float}(
     x :: BEDFile{T}
@@ -118,7 +118,7 @@ function mac{T <: Float}(
             @async remotecall_wait(mac_chunk!, q, y, x)
         end
     end
-    return y 
+    return y
 end
 
 
@@ -144,24 +144,24 @@ maf_chunk!{T <: Float}(y::DenseVector{T}, x::BEDFile{T}) = maf_chunk!(y, x, loca
 
 """
     maf_col(x::BEDFile, snp::Int)
-    
-Compute the minor allele frequency of one `snp` column of a `BEDFile` object `x`. 
+   
+Compute the minor allele frequency of one `snp` column of a `BEDFile` object `x`.
 `maf_col` will ignore missing genotype values.
 """
 function maf_col{T <: Float}(
     x   :: BEDFile{T},
     col :: Int
 )
-    alleles = zero(T) 
+    alleles = zero(T)
     obs     = 0
     for i = 1:x.geno.n
         dosage = x.geno[i,col]
-        if dosage != 1 
+        if dosage != 1
             alleles += genofloat[dosage + ONE8]
             obs += 1
         end
     end
-    return alleles / (2*obs) 
+    return alleles / (2*obs)
 end
 
 """
@@ -182,7 +182,7 @@ function maf{T <: Float}(
             @async remotecall_wait(maf_chunk!, q, y, x)
         end
     end
-    return y 
+    return y
 end
 
 
@@ -215,7 +215,7 @@ end
 
 
 """
-    sumabs2_covariate(x, covariate) 
+    sumabs2_covariate(x, covariate)
 
 This function efficiently computes the squared L2 (Euclidean) norm of a covariate of a `BEDFile` object `x`, i.e. sumabs2(x[:,covariate]).
 
@@ -253,7 +253,7 @@ function Base.sumabs2!{T <: Float}(y::DenseVector{T}, x::BEDFile{T})
     p = size(x,2)
     p == length(y) || throw(DimensionMismatch("y has $(length(y)) rows, x has $p columns"))
     @inbounds for snp = 1:x.geno.p
-        y[snp] = sumsq_snp(x,snp,x.means,x.precs) 
+        y[snp] = sumsq_snp(x,snp,x.means,x.precs)
     end
     @inbounds for covariate = 1:x.covar.p
         y[x.geno.p + covariate] = sumsq_covariate(x,covariate,x.means,x.precs)
@@ -263,7 +263,7 @@ end
 
 
 """
-    sumabs2(x::BEDFile [, shared=true, pids=procs()]) 
+    sumabs2(x::BEDFile [, shared=true, pids=procs()])
 
 Compute the squared L2 norm of each column of a compressed matrix `x`.
 
@@ -313,8 +313,8 @@ mean_chunk!{T <: Float}(x::BEDFile{T}) = mean_chunk!(x, localindexes(x.means))
 
 """
     mean_col(x::BEDFile, snp::Int)
-    
-Compute the mean of one `snp` column of a `BEDFile` object `x`. 
+   
+Compute the mean of one `snp` column of a `BEDFile` object `x`.
 Note that unlike the normal Julia `mean` function, `mean_col` ignores `NaN`s.
 """
 function mean_col{T <: Float}(x::BEDFile{T}, snp::Int)
@@ -376,7 +376,7 @@ function prec_col{T <: Float}(x::BEDFile{T}, snp::Int)
     s = zero(T)      # accumulation variable, will eventually equal mean(x,col) for current col
     t = zero(T)      # temp variable, output of interpret_genotype
     u = zero(T)      # count the number of people
-    m = x.means[snp] # column mean 
+    m = x.means[snp] # column mean
 
     # loop over all n individuals
     @inbounds for case = 1:x.geno.n
@@ -397,7 +397,7 @@ end
 """
     prec_chunk!(x::BEDFile, irange)
 
-A parallel execution kernel for calculating a subset of column precisions of `x`. 
+A parallel execution kernel for calculating a subset of column precisions of `x`.
 """
 function prec_chunk!{T <: Float}(x::BEDFile{T}, irange::UnitRange{Int})
     @inbounds for i in irange
@@ -436,7 +436,7 @@ function prec!{T <: Float}(x::BEDFile{T})
     end
     @inbounds for i = 1:x.covar.p
         u = (one(T) / std(view(x.covar.x, :, i))) :: T
-        x.precs[x.geno.p + i] = u 
+        x.precs[x.geno.p + i] = u
     end
     return nothing
 end
@@ -523,7 +523,7 @@ function Base.dot{T <: Float}(
                 u = t == ONE8 ? zero(T) : int2geno(x,t)
 
                 # accumulate dot product
-                s += y[case] * u 
+                s += y[case] * u
             end
         end
     else
@@ -542,7 +542,7 @@ function Base.dot{T <: Float}(
     x       :: BEDFile{T},
     y       :: DenseVector{T},
     snp     :: Int,
-    mask_n  :: BitArray{1}, 
+    mask_n  :: BitArray{1},
     sy      :: T = sum(y),
     sminus  :: T = sum(y[!mask_n]) # need this for standardization purposes
 )
@@ -563,7 +563,7 @@ function Base.dot{T <: Float}(
                 u = t == ONE8 ? zero(T) : int2geno(x,t)
 
                 # accumulate dot product
-                s += y[case] * u 
+                s += y[case] * u
             end
         end
     else
@@ -600,7 +600,7 @@ function dott{T <: Float}(
 )
     s = zero(T)     # accumulation variable, will eventually equal dot(y,z)
     @inbounds for snp = 1:x.geno.p
-        
+       
         # if current index of b is FALSE, then skip it since it does not contribute to Xb
         if idx[snp]
 
@@ -609,9 +609,9 @@ function dott{T <: Float}(
 
             # handle exceptions on t
             u = t == ONE8 ? zero(T) : (int2geno(x,t) - x.means[snp]) * x.precs[snp]
-           
+          
             # accumulate dot product
-            s += b[snp] * u 
+            s += b[snp] * u
         end
     end
     @inbounds for covar = (x.geno.p+1):size(x,2)
@@ -637,8 +637,7 @@ function Base.A_mul_B!{T <: Float}(
     b      :: DenseVector{T},
     idx    :: BitArray{1},
     k      :: Int,
-    mask_n :: DenseVector{Int};
-#    pids   :: Vector{Int} = procs(),
+    mask_n :: DenseVector{Int}
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
@@ -656,14 +655,16 @@ function Base.A_mul_B!{T <: Float}(
     return nothing
 end
 
+# easy wrapper for previous function
+A_mul_B!{T <: Float}(xb::DenseVector{T}, x::BEDFile{T}, b::DenseVector{T}) = A_mul_B!(xb, x, b, b .!= 0, countnz(b), x.mask)
+
 function Base.A_mul_B!{T <: Float}(
     xb     :: DenseVector{T},
     x      :: BEDFile{T},
     b      :: DenseVector{T},
     idx    :: BitArray{1},
     k      :: Int,
-    mask_n :: BitArray{1}; 
-#    pids   :: Vector{Int} = procs(x),
+    mask_n :: BitArray{1}
 )
     # error checking
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
@@ -683,7 +684,7 @@ end
 
 
 """
-    A_mul_B!(xb, x, b, idx, k [, pids=procs()])
+    A_mul_B!(xb, x, b, idx, k)
 
 This function computes the operation `x*b` for the compressed `n` x `p` design matrix from a `BEDFile` object.
 `A_mul_B!()` respects memory stride for column-major arrays by using a compressed transpose of genotypes and an uncompressed transpose of covariates.
@@ -706,15 +707,13 @@ function Base.A_mul_B!{T <: Float}(
     x    :: BEDFile{T},
     b    :: DenseVector{T},
     idx  :: BitArray{1},
-    k    :: Int;
-#    pids :: Vector{Int} = procs(x),
+    k    :: Int
 )
     # error checking
     n = length(xb)
     n == x.geno.n       || throw(ArgumentError("xb has $n rows but x has $(x.geno.n)"))
     0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
     k >= sum(idx)       || throw(ArgumentError("Must have k <= sum(idx) or X*b will not compute correctly"))
-#    pids == procs(xb) == procs(b) == procs(x.geno.xt) || throw(ArgumentError("SharedArray arguments to A_mul_B! must be seen by same processes"))
 
     # loop over the desired number of predictors
     @inbounds for case = 1:x.geno.n
@@ -725,9 +724,8 @@ function Base.A_mul_B!{T <: Float}(
 end
 
 
-
 """
-    A_mul_B(x, b, idx, k, mask_n [, pids=procs()]) 
+    A_mul_B(x, b, idx, k, mask_n)
 
 Can also be called with a bitmask vector `mask_n` containins `0`s and `1`s which excludes or includes (respectively) elements of `x` and `b` from the dot product.
 """
@@ -736,8 +734,7 @@ function A_mul_B{T <: Float}(
     b      :: SharedVector{T},
     idx    :: BitArray{1},
     k      :: Int,
-    mask_n :: DenseVector{Int};
-#    pids   :: Vector{Int} = procs(x),
+    mask_n :: DenseVector{Int}
 )
     xb = SharedArray(T, x.geno.n, init = S -> S[localindexes(S)] = zero(T), pids=pids) :: SharedVector{T}
     A_mul_B!(xb, x, b, idx, k, mask_n, pids=pids)
@@ -752,7 +749,7 @@ function A_mul_B{T <: Float}(
     mask_n :: DenseVector{Int};
 )
     xb = zeros(T, x.geno.n)
-    A_mul_B!(xb, x, b, idx, k, mask_n) 
+    A_mul_B!(xb, x, b, idx, k, mask_n)
     return xb
 end
 
@@ -786,7 +783,7 @@ function A_mul_B{T <: Float}(
 #    pids :: Vector{Int} = procs(x),
 )
     xb = SharedArray(T, x.geno.n, init = S -> S[localindexes(S)] = zero(T), pids=pids) :: SharedVector{T}
-    A_mul_B!(xb, x, b, idx, k) 
+    A_mul_B!(xb, x, b, idx, k)
     return xb
 end
 
@@ -800,6 +797,9 @@ function A_mul_B{T <: Float}(
     A_mul_B!(xb, x, b, idx, k)
     return Xb
 end
+
+# easy wrapper for A_mul_B!
+A_mul_B{T <: Float}(x::BEDFile{T}, b::DenseVector{T}) = A_mul_B(x, b, b .!= 0, countnz(b))
 
 # overload matrix-vector multiplication x*b with a BEDFile
 #Base.*{T <: Float}(x :: BEDFile{T}, b :: DenseVector{T}) = A_mul_B(x, b, b .!= zero(T), countnz(b), pids=procs(x))
@@ -821,7 +821,7 @@ function At_mul_B_chunk!{T <: Float}(
     sminus :: T = begin z = mask_n .== 0; sum(y[z]) end
 )
     @inbounds for i in irange
-        xty[i] = dot(x, y, i, mask_n, sy, sminus) 
+        xty[i] = dot(x, y, i, mask_n, sy, sminus)
     end
     return nothing
 end
@@ -830,13 +830,13 @@ function At_mul_B_chunk!{T <: Float}(
     xty    :: SharedVector{T},
     x      :: BEDFile{T},
     y      :: SharedVector{T},
-    mask_n :: BitArray{1}, 
+    mask_n :: BitArray{1},
     irange :: UnitRange{Int},
     sy     :: T = sum(y),
     sminus :: T = sum(y[!mask_n])
 )
     @inbounds for i in irange
-        xty[i] = dot(x, y, i, mask_n, sy, sminus) 
+        xty[i] = dot(x, y, i, mask_n, sy, sminus)
     end
     return nothing
 end
@@ -862,7 +862,7 @@ function At_mul_B_chunk!{T <: Float}(
     xty    :: SharedVector{T},
     x      :: BEDFile{T},
     y      :: SharedVector{T},
-    mask_n :: BitArray{1}, 
+    mask_n :: BitArray{1},
     sy     :: T = sum(y),
     sminus :: T = sum(y[!mask_n])
 )
@@ -872,7 +872,7 @@ end
 
 
 """
-    At_mul_B!(xty, x::BEDFile, y, mask_n, [, pids=procs()]) 
+    At_mul_B!(xty, x::BEDFile, y, mask_n, [, pids=procs()])
 
 Can also be called with a bitmask vector `mask_n` containins `0`s and `1`s which excludes or includes elements of `x` and `y` from the dot product.
 """
@@ -895,7 +895,7 @@ function Base.At_mul_B!{T <: Float}(
     # each processor will compute its own chunk of x'*y
     @sync begin
         for q in procs(xty)
-#            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, mask_n, sy, sminus) 
+#            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, mask_n, sy, sminus)
             @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, mask_n, sy, sminus)
         end
     end
@@ -906,7 +906,7 @@ function Base.At_mul_B!{T <: Float}(
     xty     :: SharedVector{T},
     x       :: BEDFile{T},
     y       :: SharedVector{T},
-    mask_n  :: BitArray{1}; 
+    mask_n  :: BitArray{1};
     pids    :: Vector{Int} = procs(x),
     sy      :: T = sum(y),
     #sminus  :: T = sum(y[mask_n .== 0])
@@ -921,7 +921,7 @@ function Base.At_mul_B!{T <: Float}(
     # each processor will compute its own chunk of x'*y
     @sync begin
         for q in procs(xty)
-#            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, mask_n, sy, sminus) 
+#            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, mask_n, sy, sminus)
             @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, mask_n, sy, sminus)
         end
     end
@@ -935,7 +935,6 @@ function Base.At_mul_B!{T <: Float}(
     y       :: Vector{T},
     mask_n  :: DenseVector{Int},
     sy      :: T = sum(y),
-    #sminus  :: T = sum(y[mask_n .== 0])
     sminus  :: T = begin z = mask_n .== 0; sum(y[z]) end
 )
     # error checking
@@ -945,7 +944,7 @@ function Base.At_mul_B!{T <: Float}(
 
     # loop over the desired number of predictors
     @inbounds for snp = 1:p
-        xty[snp] = dot(x, y, snp, mask_n, sy, sminus) 
+        xty[snp] = dot(x, y, snp, mask_n, sy, sminus)
     end
     return nothing
 end
@@ -954,7 +953,7 @@ function Base.At_mul_B!{T <: Float}(
     xty     :: Vector{T},
     x       :: BEDFile{T},
     y       :: Vector{T},
-    mask_n  :: BitArray{1}, 
+    mask_n  :: BitArray{1},
     sy      :: T = sum(y),
     #sminus  :: T = sum(y[mask_n .== 0])
     sminus  :: T = begin z = !mask_n; sum(y[z]) end
@@ -966,7 +965,7 @@ function Base.At_mul_B!{T <: Float}(
 
     # loop over the desired number of predictors
     @inbounds for snp = 1:p
-        xty[snp] = dot(x, y, snp, mask_n, sy, sminus) 
+        xty[snp] = dot(x, y, snp, mask_n, sy, sminus)
     end
     return nothing
 end
@@ -1006,7 +1005,7 @@ function At_mul_B_chunk!{T <: Float}(
 end
 
 """
-    At_mul_B!(xty, x, y, [, pids=procs()]) 
+    At_mul_B!(xty, x, y, [, pids=procs()])
 
 This function computes the operation `x'*y` for the compressed `n` x `p` design matrix from a `BEDFile` object.
 `At_mul_B!` enforces a uniform type (`SharedArray` v. `Array` and `Float64` v. `Float32`) across all arrays.
@@ -1036,7 +1035,7 @@ function Base.At_mul_B!{T <: Float}(
     x.geno.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
     pids == procs(xty) == procs(y) == procs(x) || throw(ArgumentError("SharedArray arguments to At_mul_B! must be seen by same processes"))
 
-    # each processor will compute its own chunk of x'*y 
+    # each processor will compute its own chunk of x'*y
     @sync begin
         for q in procs(xty)
 #            @async remotecall_wait(At_mul_B_chunk!, q, xty, x, y, sy)
@@ -1068,6 +1067,9 @@ function Base.At_mul_B!{T <: Float}(
 end
 
 
+# easy function wrapper
+At_mul_B!{T <: Float}(xty::DenseVector{T}, x::BEDFile{T}, y::DenseVector{T}) = At_mul_B!(xty, x, y, x.mask) 
+
 
 """
     At_mul_B(x, y, mask_n [, pids=procs()])
@@ -1090,10 +1092,10 @@ function Base.At_mul_B{T <: Float}(
     x       :: BEDFile{T},
     y       :: SharedVector{T},
     mask_n  :: DenseVector{Int};
-    pids    :: Vector{Int} = procs(),
+    pids    :: Vector{Int} = procs(x),
     sy      :: T = sum(y)
 )
-    p = size(x,2) 
+    p = size(x,2)
     xty = SharedArray(T, p, init = S -> S[localindexes(S)] = zero(T), pids=pids) :: SharedVector{T}
     At_mul_B!(xty, x, y, mask_n, pids=pids, sy=sy)
     return xty
@@ -1103,12 +1105,14 @@ end
 function Base.At_mul_B{T <: Float}(
     x       :: BEDFile{T},
     y       :: Vector{T},
-    mask_n  :: DenseVector{Int}; 
+    mask_n  :: DenseVector{Int};
     sy      :: T = sum(y),
     sminus  :: T = sum(y[mask_n .== 0])
 )
-    p = size(x,2) 
+    p = size(x,2)
     xty = zeros(T, p)
-    At_mul_B!(xty, x, y, mask_n, sy, sminus) 
+    At_mul_B!(xty, x, y, mask_n, sy, sminus)
     return xty
 end
+
+At_mul_B{T <: Float}(x::BEDFile{T}, y::DenseVector{T}) = At_mul_B(x, y, x.mask)
