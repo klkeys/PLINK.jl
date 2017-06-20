@@ -334,7 +334,7 @@ function BEDFile(
     pids     :: Vector{Int} = procs()
 )
     # make a temporary covariate file
-    tmpcovar = ENV["TMPDIR"] * "x_$(myid()).txt" 
+    tmpcovar = tempdir() * "/x_$(myid()).txt" 
     famfile  = filename[1:(endof(filename)-3)] * "fam"
     n        = countlines(famfile)
     writedlm(tmpcovar, ones(n))
