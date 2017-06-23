@@ -44,7 +44,6 @@ __kernel void compute_xt_times_vector(
     double mean      = means[snp];
     double precision = precisions[snp];
 
-
     // initialize values of floating point and compressed genotype arrays
     local_floatgeno[threadindex] = 0.0;
 
@@ -56,8 +55,8 @@ __kernel void compute_xt_times_vector(
 
     // now query current value of vector y
     // also save the bitmask value
-    double y = vec[subject_index]
-    int mask = mask_n[subject_index]
+    double y = vec[subject_index];
+    int mask = mask_n[subject_index];
 
     // ensure that subject is in set of observations
     // this is a standard bounds check with OpenCL kernels
