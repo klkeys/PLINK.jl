@@ -55,8 +55,8 @@ __kernel void compute_xt_times_vector(
 
     // now query current value of vector y
     // also save the bitmask value
-    double y = vec[subject_index];
-    int mask = mask_n[subject_index];
+    //double y = vec[subject_index];
+    //int mask = mask_n[subject_index];
 
     // ensure that subject is in set of observations
     // this is a standard bounds check with OpenCL kernels
@@ -68,8 +68,8 @@ __kernel void compute_xt_times_vector(
         int k = 2*(row & 3);
         char genotype_block = packedgeno_snpmajor[snp * packedstride_snpmajor + (row >> 2)];
         int val  = (((int)genotype_block)>>k) & 3;
-        //local_floatgeno[threadindex] = mapping[val];
-        double geno = mapping[val];
+        local_floatgeno[threadindex] = mapping[val];
+        //double geno = mapping[val];
 
         // synchronize threads in local workgroup
         // barrier(CLK_LOCAL_MEM_FENCE);
@@ -78,9 +78,9 @@ __kernel void compute_xt_times_vector(
         // if missing then set to 0.0, otherwise standardize on fly using mean and precision
         // in this process, will multiply against value at correct index of vector
         // in essence, this is the X'*y part
-        // local_floatgeno[threadindex] = (local_floatgeno[threadindex] == 9.0 || mask_n[subject_index] == 0) ? 0.0 : (local_floatgeno[threadindex] - mean) * precision * vec[subject_index];
+        local_floatgeno[threadindex] = (local_floatgeno[threadindex] == 9.0 || mask_n[subject_index] == 0) ? 0.0 : (local_floatgeno[threadindex] - mean) * precision * vec[subject_index];
         // try storing this as a local variable too
-        local_floatgeno[threadindex] = (geno == 9.0 || mask == 0) ? 0.0 : (geno - mean) * precision * y;
+        //local_floatgeno[threadindex] = (geno == 9.0 || mask == 0) ? 0.0 : (geno - mean) * precision * y;
 
         // synchronize threads in local workgroup
         barrier(CLK_LOCAL_MEM_FENCE);
