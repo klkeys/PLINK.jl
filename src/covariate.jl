@@ -5,7 +5,8 @@ immutable CovariateMatrix{T <: Float} <: AbstractArray{T, 2}
     xt :: SharedMatrix{T} 
     h  :: Vector{String} # header 
 
-    CovariateMatrix(x::SharedMatrix{T}, p::Int, xt::SharedMatrix{T}, h::Vector{String}) = new(x,p,xt,h)
+    #CovariateMatrix(x::SharedMatrix{T}, p::Int, xt::SharedMatrix{T}, h::Vector{String}) = new(x,p,xt,h)
+    CovariateMatrix{T}(x, p, xt, h) where {T <: Float} = new{T}(x,p,xt,h)
 end
 
 ### 22 Sep 2016: not needed in Julia v0.5?
@@ -34,11 +35,11 @@ function CovariateMatrix(
     end
 
     # make SharedArray container for x_temp
-    x = SharedArray(T, size(x_temp), pids=pids) :: SharedMatrix{eltype(x_temp)}
+    x = SharedArray{T}(size(x_temp), pids=pids) :: SharedMatrix{eltype(x_temp)}
     copy!(x, x_temp)
 
     # do same for x'
-    xt = SharedArray(T, reverse(size(x_temp)), pids=pids) :: SharedMatrix{eltype(x_temp)}
+    xt = SharedArray{T}(reverse(size(x_temp)), pids=pids) :: SharedMatrix{eltype(x_temp)}
     transpose!(xt, x_temp)
 
     # save p for convenience
@@ -68,7 +69,10 @@ Base.endof(x::CovariateMatrix) = length(x.x)
 
 Base.eltype(x::CovariateMatrix) = eltype(x.x) 
 
-Base.linearindexing(::Type{CovariateMatrix}) = Base.LinearFast()
+Base.IndexStyle(::Type{CovariateMatrix}) = Base.IndexLinear()
+
+# assume that SharedArray processes are from principal covariate matrix
+Base.procs(x::CovariateMatrix) = procs(x.x)
 
 # here we annotate return value with type of x
 # this hack is **VERY** important for efficient indexing x from a BEDFile!
@@ -95,7 +99,7 @@ end # function Base.similar
 function Base.similar(x::CovariateMatrix)
     n,p = size(x)
     T   = eltype(x)
-    CovariateMatrix(SharedArray(T, (n,p), pids=procs()), p, SharedArray(T, (p,n), pids=procs()), ["V" * "$i" for i = 1:p])
+    CovariateMatrix(SharedArray{T}((n,p), pids=procs(x)), p, SharedArray{T}((p,n), pids=procs(x)), ["V" * "$i" for i = 1:p])
 end # function Base.similar
 
 display(x::CovariateMatrix) = display(x.x)

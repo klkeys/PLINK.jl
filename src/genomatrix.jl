@@ -94,7 +94,7 @@ Base.ndims(x::GenoMatrix) = 2
 
 Base.copy(x::GenoMatrix) = GenoMatrix(x.x,x.xt,x.n,x.p,x.blocksize,x.tblocksize)
 
-Base.linearindexing(x::Type{GenoMatrix}) = Base.LinearSlow() 
+Base.IndexStyle(x::Type{GenoMatrix}) = Base.IndexLinear() 
 
 
 function ==(x::GenoMatrix, y::GenoMatrix)
@@ -190,7 +190,7 @@ function read_bedfile(
     # file seems to be a true BED file
     # will close filestream and slurp entire file into SharedArray
 #    close(xstream)
-    x = SharedArray(abspath(filename), Int8, (nbytes-3,), 3, pids=pids) :: SharedVector{Int8}
+    x = SharedArray{Int8}(abspath(filename), (nbytes-3,), 3, pids=pids) :: SharedVector{Int8}
 
     # return the genotypes
     return x

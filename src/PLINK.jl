@@ -49,13 +49,14 @@ const THREE8 = convert(Int8,3)
 
 # PLINK magic numbers
 const MNUM1  = convert(Int8,108)
-#const MNUM1  = convert(Int8, -17)
 const MNUM2  = convert(Int8,27)
+
+# old PLINK magic numbers
+#const MNUM1  = convert(Int8, -17)
 #const MNUM2  = convert(Int8,-85)
 
 # typealias floating point operations
-typealias Float Union{Float32, Float64}
-
+const Float = Union{Float32,Float64}
 """
 This lookup table encodes the following PLINK format for genotypes:
 

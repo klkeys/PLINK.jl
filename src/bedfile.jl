@@ -81,8 +81,8 @@ function BEDFile(
 )
     x = GenoMatrix(filename, tfilename, n, p, blocksize, tblocksize, pids=pids) :: GenoMatrix{T}
     y = CovariateMatrix(T,x2filename, pids=pids, header=header) :: CovariateMatrix{T}
-    m = SharedArray(abspath(mfilename), T, (x.p + y.p,), pids=pids) :: SharedVector{T}
-    d = SharedArray(abspath(pfilename), T, (x.p + y.p,), pids=pids) :: SharedVector{T}
+    m = SharedArray{T}(abspath(mfilename), (x.p + y.p,), pids=pids) :: SharedVector{T}
+    d = SharedArray{T}(abspath(pfilename), (x.p + y.p,), pids=pids) :: SharedVector{T}
     return BEDFile{T}(x,y,m,d,ones(Int,x.n))
 end
 
@@ -202,8 +202,8 @@ function BEDFile(
 
     # make dummy means, precisions
     # default yields no standardization (zero mean, identity precision)
-    m = SharedArray(T, (x.p + y.p,), init = S -> localindexes(S) = zero(T), pids=pids) :: SharedVector{T} 
-    d = SharedArray(T, (x.p + y.p,), init = S -> localindexes(S) = one(T),  pids=pids) :: SharedVector{T}
+    m = SharedArray{T}((x.p + y.p,), init = S -> localindexes(S) = zero(T), pids=pids) :: SharedVector{T} 
+    d = SharedArray{T}((x.p + y.p,), init = S -> localindexes(S) = one(T),  pids=pids) :: SharedVector{T}
 
     # construct BEDFile
     z = BEDFile{T}(x,y,m,d,ones(Int,x.n)) 
@@ -256,8 +256,8 @@ function BEDFile(
 
     # load means, precisions
     p = x.p + y.p
-    m = SharedArray(abspath(mfilename), T, (p,), pids=pids) :: SharedVector{T}
-    d = SharedArray(abspath(pfilename), T, (p,), pids=pids) :: SharedVector{T}
+    m = SharedArray{T}(abspath(mfilename), (p,), pids=pids) :: SharedVector{T}
+    d = SharedArray{T}(abspath(pfilename), (p,), pids=pids) :: SharedVector{T}
 
     return BEDFile{T}(x,y,m,d,ones(Int,x.n)) 
 end

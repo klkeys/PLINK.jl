@@ -45,7 +45,7 @@ This function calculates the missingness for each SNP of a `BEDFile` object `x`.
 function missing{T <: Float}(
     x :: BEDFile{T}
 )
-    y = SharedArray(T, (x.geno.p,), pids=procs(x)) :: SharedVector{T}
+    y = SharedArray{T}((x.geno.p,), pids=procs(x)) :: SharedVector{T}
     @sync begin
         for q in procs(x)
             @async remotecall_wait(missing_chunk!, q, y, x)
@@ -112,7 +112,7 @@ function mac{T <: Float}(
     #@inbounds for i = 1:x.geno.p
     #    z[i] = mac_col(x, i)
     #end
-    y = SharedArray(Int, (x.geno.p,), pids=procs(x)) :: SharedVector{Int}
+    y = SharedArray{Int}((x.geno.p,), pids=procs(x)) :: SharedVector{Int}
     @sync begin
         for q in procs(x)
             @async remotecall_wait(mac_chunk!, q, y, x)
@@ -176,7 +176,7 @@ function maf{T <: Float}(
     #@inbounds for i = 1:x.geno.p
     #    z[i] = maf_col(x, i)
     #end
-    y = SharedArray(T, (x.geno.p,)) :: SharedVector{T}
+    y = SharedArray{T}((x.geno.p,)) :: SharedVector{T}
     @sync begin
         for q in procs(x)
             @async remotecall_wait(maf_chunk!, q, y, x)
@@ -281,7 +281,7 @@ function Base.sumabs2{T <: Float}(
     pids    :: Vector{Int} = procs(x),
 )
     p = size(x,2)
-    y = ifelse(shared, SharedArray(T, p, init = S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, p))
+    y = ifelse(shared, SharedArray{T}((p,), init = S -> S[localindexes(S)] = zero(T), pids=pids), zeros(T, p))
     sumabs2!(y,x)
     return y
 end
@@ -627,7 +627,7 @@ end
 
 
 """
-    A_mul_B!(xb, x, b, idx, k, mask_n [, pids=procs()])
+    A_mul_B!(xb, x, b, idx, k, mask_n)
 
 Can also be called with a bitmask vector `mask_n` containins `0`s and `1`s which excludes or includes (respectively) elements of `x` and `b` from the dot product.
 """
@@ -697,10 +697,6 @@ Arguments:
 - `b` is the `p`-dimensional vector against which we multiply `x`.
 - `idx` is a `BitArray` that indexes the nonzeroes in `b`.
 - `k` is the number of nonzeroes to use in computing `x*b`.
-
-Optional Arguments:
-
-- `pids` is a vector of process IDs over which to distribute the `SharedArray`s for `means` and `precs`, if not supplied. Defaults to `procs()`.
 """
 function Base.A_mul_B!{T <: Float}(
     xb   :: DenseVector{T},
@@ -736,8 +732,8 @@ function A_mul_B{T <: Float}(
     k      :: Int,
     mask_n :: DenseVector{Int}
 )
-    xb = SharedArray(T, x.geno.n, init = S -> S[localindexes(S)] = zero(T), pids=pids) :: SharedVector{T}
-    A_mul_B!(xb, x, b, idx, k, mask_n, pids=pids)
+    xb = SharedArray{T}((x.geno.n,), init = S -> S[localindexes(S)] = zero(T), pids=procs(x)) :: SharedVector{T}
+    A_mul_B!(xb, x, b, idx, k, mask_n)
     return xb
 end
 
@@ -756,7 +752,7 @@ end
 
 
 """
-    A_mul_B(x::BEDFile, b, idx, k [, pids=procs()])
+    A_mul_B(x::BEDFile, b, idx, k)
 
 This function computes the operation `x*b` for the compressed `n` x `p` design matrix from a `BEDFile` object.
 `A_mul_B()` respects memory stride for column-major arrays.
@@ -769,20 +765,14 @@ Arguments:
 - `b` is the `p`-dimensional vector against which we multiply `x`.
 - `idx` is a `BitArray` that indexes the nonzeroes in `b`.
 - `k` is the number of nonzeroes to use in computing `x*b`.
-
-Optional Arguments:
-
-- `pids` is a vector of process IDs over which to distribute the `SharedArray`s for `means` and `precs`, if not supplied,
-   as well as the output vector. Defaults to `procs()`. Only available for `SharedArray` arguments to `b`.
 """
 function A_mul_B{T <: Float}(
     x    :: BEDFile{T},
     b    :: SharedVector{T},
     idx  :: BitArray{1},
-    k    :: Int;
-#    pids :: Vector{Int} = procs(x),
+    k    :: Int
 )
-    xb = SharedArray(T, x.geno.n, init = S -> S[localindexes(S)] = zero(T), pids=pids) :: SharedVector{T}
+    xb = SharedArray{T}((x.geno.n,), init = S -> S[localindexes(S)] = zero(T), pids=procs(x)) :: SharedVector{T}
     A_mul_B!(xb, x, b, idx, k)
     return xb
 end
@@ -881,7 +871,7 @@ function Base.At_mul_B!{T <: Float}(
     x       :: BEDFile{T},
     y       :: SharedVector{T},
     mask_n  :: DenseVector{Int};
-    pids    :: Vector{Int} = procs(),
+    pids    :: Vector{Int} = procs(x),
     sy      :: T = sum(y),
     #sminus  :: T = sum(y[mask_n .== 0])
     sminus  :: T = begin z = mask_n .== 0; sum(y[z]) end
@@ -1026,7 +1016,7 @@ function Base.At_mul_B!{T <: Float}(
     xty     :: SharedVector{T},
     x       :: BEDFile{T},
     y       :: SharedVector{T};
-    pids    :: Vector{Int} = procs(),
+    pids    :: Vector{Int} = procs(x),
     sy      :: T = sum(y)
 )
     # error checking
@@ -1096,7 +1086,7 @@ function Base.At_mul_B{T <: Float}(
     sy      :: T = sum(y)
 )
     p = size(x,2)
-    xty = SharedArray(T, p, init = S -> S[localindexes(S)] = zero(T), pids=pids) :: SharedVector{T}
+    xty = SharedArray{T}((p,), init = S -> S[localindexes(S)] = zero(T), pids=pids) :: SharedVector{T}
     At_mul_B!(xty, x, y, mask_n, pids=pids, sy=sy)
     return xty
 end
