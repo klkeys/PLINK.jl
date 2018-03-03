@@ -96,6 +96,8 @@ Base.copy(x::GenoMatrix) = GenoMatrix(x.x,x.xt,x.n,x.p,x.blocksize,x.tblocksize)
 
 Base.IndexStyle(x::Type{GenoMatrix}) = Base.IndexLinear() 
 
+Base.procs(x::Type{GenoMatrix}) = procs(x.x)
+
 
 function ==(x::GenoMatrix, y::GenoMatrix)
     x.x  == y.x  &&
