@@ -108,6 +108,7 @@ const gpucode64 = readstring(open(Pkg.dir() * "/PLINK/src/kernels/iht_kernels64.
 const gpucode32 = readstring(open(Pkg.dir() * "/PLINK/src/kernels/iht_kernels32.cl"))
 
 include("covariate.jl")
+include("data.jl")
 include("genomatrix.jl")
 include("bedfile.jl")
 include("compression.jl")
