@@ -1,13 +1,13 @@
 ### subroutines to read data
 
 """
-    read_data(xpath) -> x::BEDFile, y::SharedVector
+    read_plink_data(xpath) -> x::BEDFile, y::SharedVector
 
 Read the trio of binary PLINK files (BED, BIM, FAM) from `xpath`. The response `y` is loaded from the rightmost column of the FAM file.
 Unlike the `BEDFile` constructors, the variable `xpath` follows the PLINK convention in that it should point to the trio of files.
 For example,
 
-    read_data("mydata")
+    read_plink_data("mydata")
 
 would read the trio `mydata.bed`, `mydata.bim`, and `mydata.fam` in the current working directory.
 """
@@ -20,10 +20,10 @@ function read_plink_data(
 )
 
     # load genotype data
-    x = BEDFile(T, filepath * ".bed", pids=pids)
+    x = BEDFile(T, xpath * ".bed", pids=pids)
 
     # read the FAM file
-    famfile = filepath * ".fam"
+    famfile = xpath * ".fam"
     Y = readdlm(famfile, delim, header=header)
 
     # check that the FAM file has six columns
@@ -43,7 +43,7 @@ function read_plink_data(
 end
 
 # default for previous function is Float64
-read_plink_data(filepath::String; pids::DenseVector{Int} = procs(), header::Bool = false, delim::Char = ' ') = read_plink_data(Float64, filepath, pids=pids, header=header, delim=delim)
+read_plink_data(xpath::String; pids::DenseVector{Int} = procs(), header::Bool = false, delim::Char = ' ') = read_plink_data(Float64, xpath, pids=pids, header=header, delim=delim)
 
 
 """
@@ -64,7 +64,7 @@ function read_plink_data(
 )
 
     # load genotype data
-    x = BEDFile(T, filepath * ".bed", pids=pids)
+    x = BEDFile(T, xpath * ".bed", pids=pids)
 
     # load phenotype from file
     # binary files -> make SharedVector directly
@@ -106,7 +106,7 @@ function read_plink_data(
 )
 
     # load genotype data
-    x = BEDFile(T, filepath * ".bed", covpath, pids=pids, header=covheader)
+    x = BEDFile(T, xpath * ".bed", covpath, pids=pids, header=covheader)
 
     # load phenotype from file
     # binary files -> make SharedVector directly
