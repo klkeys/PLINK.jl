@@ -27,21 +27,21 @@ function GenoMatrix(
     # first create filepath to BIM file
     bimfile = filename[1:(endof(filename)-3)] * "bim"
 
-    # specify column element types of BIM file 
+    # specify column element types of BIM file
     #eltypes = [Int, String, Int, Int, String, String]
 
     # load BIM
     #df = readtable(bimfile, header = false, separator = '\t', eltypes = eltypes)
 
     # second column of BIM file contains the SNP ids
-    #snpids = convert(Vector{String}, df[:x2]) :: Vector{String} 
+    #snpids = convert(Vector{String}, df[:x2]) :: Vector{String}
     snpids = convert(Vector{String}, split(chomp(readstring(`awk -F " " '{print $2}' $bimfile`)), '\n', keep=false))
-    
+  
     x = GenoMatrix(
-        read_bedfile(filename, pids=pids), 
+        read_bedfile(filename, pids=pids),
         read_bedfile(tfilename, transpose = true, pids=pids),
         n, p, blocksize, tblocksize, snpids)
-    
+  
     return x
 end
 
@@ -94,7 +94,7 @@ Base.ndims(x::GenoMatrix) = 2
 
 Base.copy(x::GenoMatrix) = GenoMatrix(x.x,x.xt,x.n,x.p,x.blocksize,x.tblocksize)
 
-Base.IndexStyle(x::Type{GenoMatrix}) = Base.IndexLinear() 
+Base.IndexStyle(x::Type{GenoMatrix}) = Base.IndexLinear()
 
 Base.procs(x::Type{GenoMatrix}) = procs(x.x)
 
@@ -109,9 +109,9 @@ function ==(x::GenoMatrix, y::GenoMatrix)
 end
 
 isequal(x::GenoMatrix, y::GenoMatrix) = x == y
-    
+  
 
-# important matrix indexing! returns the Int8 
+# important matrix indexing! returns the Int8
 function getindex(
     X   :: GenoMatrix,
     x   :: SharedVector{Int8},
@@ -121,7 +121,7 @@ function getindex(
     genotype_block = x[(col-1)*X.blocksize + ((row - 1) >>> 2) + 1]
     k = 2*((row-1) & 3)
     genotype = (genotype_block >>> k) & THREE8
-    return genotype 
+    return genotype
 end
 
 # internal routine to index the transposed matrix
@@ -135,7 +135,7 @@ function getindex_t(
     genotype_block = x[(col-1)*X.tblocksize + ((row - 1) >>> 2) + 1]
     k = 2*((row-1) & 3)
     genotype = (genotype_block >>> k) & THREE8
-    return genotype 
+    return genotype
 end
 
 # default indexing is to column-major matrix
@@ -167,38 +167,31 @@ Output:
   at the end of each block.
 """
 function read_bedfile(
-    filename  :: String; 
-    transpose :: Bool = false, 
+    filename  :: String;
+    transpose :: Bool = false,
     pids      :: Vector{Int} = procs()
 )
 
     # check that file is BED file
-    contains(filename, ".bed") || throw(ArgumentError("Filename must explicitly point to a PLINK \".bed\" file."))
-
-    # how many bytes do we have?
-    nbytes = filesize(filename)
-
-#    # open file stream
-#    xstream = open(filename, "r")
-#
+    @assert contains(filename, ".bed") "Filename must explicitly point to a PLINK \".bed\" file."
+  
 #    # check magic numbers and mode
 #   isequal(read(xstream, Int8), MNUM1) || throw(error("Problem with first byte of magic number, is this a true BED file?"))
 #   isequal(read(xstream, Int8), MNUM2) || throw(error("Problem with second byte of magic number, is this a true BED file?"))
 #   (transpose && isequal(read(xstream, Int8), ONE8)) && throw(error("For transposed matrix, third byte of BED file must indicate individual-major format."))
-#
-#    # now slurp file contents into SharedArray
-#   x = SharedArray(abspath(filename), Int8, (nbytes,), pids=pids)
+
+    # how many bytes do we have?
+    nbytes = filesize(filename)
 
     # file seems to be a true BED file
     # will close filestream and slurp entire file into SharedArray
-#    close(xstream)
     x = SharedArray{Int8}(abspath(filename), (nbytes-3,), 3, pids=pids) :: SharedVector{Int8}
 
     # return the genotypes
     return x
 end
 
-function display(x::GenoMatrix) 
+function display(x::GenoMatrix)
     println("A compressed GenoMatrix object with the following features:")
     println("\tnumber of cases        = $(x.n)")
     println("\tgenetic covariates     = $(x.p)")

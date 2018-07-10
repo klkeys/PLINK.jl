@@ -20,7 +20,7 @@ missing_chunk!{T <: Float}(y::DenseVector{T}, x::BEDFile{T}) = missing_chunk!(y,
 
 """
     missing_col(x::BEDFile, snp::Int)
-   
+  
 Compute the missing of one `snp` column of a `BEDFile` object `x`.
 """
 function missing_col{T <: Float}(
@@ -79,7 +79,7 @@ mac_chunk!{T <: Float}(y::DenseVector{Int}, x::BEDFile{T}) = mac_chunk!(y, x, lo
 
 """
     mac_col(x::BEDFile, snp::Int)
-   
+  
 Compute the mean of one `snp` column of a `BEDFile` object `x`.
 `mac_col` will ignore missing genotype values.
 """
@@ -144,7 +144,7 @@ maf_chunk!{T <: Float}(y::DenseVector{T}, x::BEDFile{T}) = maf_chunk!(y, x, loca
 
 """
     maf_col(x::BEDFile, snp::Int)
-   
+  
 Compute the minor allele frequency of one `snp` column of a `BEDFile` object `x`.
 `maf_col` will ignore missing genotype values.
 """
@@ -251,7 +251,7 @@ Arguments:
 """
 function Base.sumabs2!{T <: Float}(y::DenseVector{T}, x::BEDFile{T})
     p = size(x,2)
-    p == length(y) || throw(DimensionMismatch("y has $(length(y)) rows, x has $p columns"))
+    @assert p == length(y) "y has $(length(y)) rows, x has $p columns"
     @inbounds for snp = 1:x.geno.p
         y[snp] = sumsq_snp(x,snp,x.means,x.precs)
     end
@@ -313,7 +313,7 @@ mean_chunk!{T <: Float}(x::BEDFile{T}) = mean_chunk!(x, localindexes(x.means))
 
 """
     mean_col(x::BEDFile, snp::Int)
-   
+  
 Compute the mean of one `snp` column of a `BEDFile` object `x`.
 Note that unlike the normal Julia `mean` function, `mean_col` ignores `NaN`s.
 """
@@ -600,7 +600,7 @@ function dott{T <: Float}(
 )
     s = zero(T)     # accumulation variable, will eventually equal dot(y,z)
     @inbounds for snp = 1:x.geno.p
-       
+      
         # if current index of b is FALSE, then skip it since it does not contribute to Xb
         if idx[snp]
 
@@ -609,7 +609,7 @@ function dott{T <: Float}(
 
             # handle exceptions on t
             u = t == ONE8 ? zero(T) : (int2geno(x,t) - x.means[snp]) * x.precs[snp]
-          
+         
             # accumulate dot product
             s += b[snp] * u
         end
@@ -640,10 +640,10 @@ function Base.A_mul_B!{T <: Float}(
     mask_n :: DenseVector{Int}
 )
     # error checking
-    0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
-    k >= sum(idx)       || throw(ArgumentError("Must have k >= sum(idx) or X*b will not compute correctly"))
+    @assert 0 <= k <= size(x,2) "Number of active predictors must be nonnegative and less than p"
+    @assert k >= sum(idx) "Must have k >= sum(idx) or X*b will not compute correctly"
     n = length(xb)
-    n == x.geno.n       || throw(ArgumentError("xb has $n rows but x has $(x.geno.n) rows"))
+    @assert n == x.geno.n "xb has $n rows but x has $(x.geno.n) rows"
 
     # loop over the desired number of predictors
     @inbounds for case = 1:n
@@ -667,10 +667,10 @@ function Base.A_mul_B!{T <: Float}(
     mask_n :: BitArray{1}
 )
     # error checking
-    0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
-    k >= sum(idx)       || throw(ArgumentError("Must have k >= sum(idx) or X*b will not compute correctly"))
+    @assert 0 <= k <= size(x,2) "Number of active predictors must be nonnegative and less than p"
+    @assert k >= sum(idx) "Must have k >= sum(idx) or X*b will not compute correctly"
     n = length(xb)
-    n == x.geno.n       || throw(ArgumentError("xb has $n rows but x has $(x.geno.n) rows"))
+    @assert n == x.geno.n "xb has $n rows but x has $(x.geno.n) rows"
 
     # loop over the desired number of predictors
     @inbounds for case = 1:n
@@ -707,9 +707,9 @@ function Base.A_mul_B!{T <: Float}(
 )
     # error checking
     n = length(xb)
-    n == x.geno.n       || throw(ArgumentError("xb has $n rows but x has $(x.geno.n)"))
-    0 <= k <= size(x,2) || throw(ArgumentError("Number of active predictors must be nonnegative and less than p"))
-    k >= sum(idx)       || throw(ArgumentError("Must have k <= sum(idx) or X*b will not compute correctly"))
+    @assert n == x.geno.n "xb has $n rows but x has $(x.geno.n)"
+    @assert 0 <= k <= size(x,2) "Number of active predictors must be nonnegative and less than p"
+    @assert k >= sum(idx) "Must have k <= sum(idx) or X*b will not compute correctly"
 
     # loop over the desired number of predictors
     @inbounds for case = 1:x.geno.n
@@ -878,9 +878,9 @@ function Base.At_mul_B!{T <: Float}(
 )
     # error checking
     p = size(x,2)
-    p <= length(xty)      || throw(ArgumentError("Attempting to fill argument xty of length $(length(xty)) with $p elements!"))
-    x.geno.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.geno.n) of them!"))
-    pids == procs(xty) == procs(y) == procs(x.geno.x) || throw(ArgumentError("SharedArray arguments to At_mul_B! must be seen by same processes"))
+    @assert p <= length(xty) "Attempting to fill argument xty of length $(length(xty)) with $p elements!"
+    @assert x.geno.n == length(y) "Argument y has $(length(y)) elements but should have $(x.geno.n) of them!"
+    @assert pids == procs(xty) == procs(y) == procs(x.geno.x) "SharedArray arguments to At_mul_B! must be seen by same processes"
 
     # each processor will compute its own chunk of x'*y
     @sync begin
@@ -904,9 +904,9 @@ function Base.At_mul_B!{T <: Float}(
 )
     # error checking
     p = size(x,2)
-    p <= length(xty)      || throw(ArgumentError("Attempting to fill argument xty of length $(length(xty)) with $p elements!"))
-    x.geno.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.geno.n) of them!"))
-    pids == procs(xty) == procs(y) == procs(x.geno.x) || throw(ArgumentError("SharedArray arguments to At_mul_B! must be seen by same processes"))
+    @assert p <= length(xty) "Attempting to fill argument xty of length $(length(xty)) with $p elements!"
+    @assert x.geno.n == length(y) "Argument y has $(length(y)) elements but should have $(x.geno.n) of them!"
+    @assert pids == procs(xty) == procs(y) == procs(x.geno.x) "SharedArray arguments to At_mul_B! must be seen by same processes"
 
     # each processor will compute its own chunk of x'*y
     @sync begin
@@ -929,8 +929,8 @@ function Base.At_mul_B!{T <: Float}(
 )
     # error checking
     p = size(x,2)
-    p <= length(xty)      || throw(ArgumentError("Attempting to fill argument xty of length $(length(xty)) with $p elements!"))
-    x.geno.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.geno.n) of them!"))
+    @assert p <= length(xty) "Attempting to fill argument xty of length $(length(xty)) with $p elements!"
+    @assert x.geno.n == length(y) "Argument y has $(length(y)) elements but should have $(x.geno.n) of them!"
 
     # loop over the desired number of predictors
     @inbounds for snp = 1:p
@@ -950,8 +950,8 @@ function Base.At_mul_B!{T <: Float}(
 )
     # error checking
     p = size(x,2)
-    p <= length(xty)      || throw(ArgumentError("Attempting to fill argument xty of length $(length(xty)) with $p elements!"))
-    x.geno.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.geno.n) of them!"))
+    @assert p <= length(xty) "Attempting to fill argument xty of length $(length(xty)) with $p elements!"
+    @assert x.geno.n == length(y) "Argument y has $(length(y)) elements but should have $(x.geno.n) of them!"
 
     # loop over the desired number of predictors
     @inbounds for snp = 1:p
@@ -1021,9 +1021,9 @@ function Base.At_mul_B!{T <: Float}(
 )
     # error checking
     p = size(x,2)
-    p <= length(xty) || throw(ArgumentError("Attempting to fill argument xty of length $(length(xty)) with $p elements!"))
-    x.geno.n == length(y) || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.n) of them!"))
-    pids == procs(xty) == procs(y) == procs(x) || throw(ArgumentError("SharedArray arguments to At_mul_B! must be seen by same processes"))
+    @assert p <= length(xty) "Attempting to fill argument xty of length $(length(xty)) with $p elements!"
+    @assert x.geno.n == length(y) "Argument y has $(length(y)) elements but should have $(x.n) of them!"
+    @assert pids == procs(xty) == procs(y) == procs(x) "SharedArray arguments to At_mul_B! must be seen by same processes"
 
     # each processor will compute its own chunk of x'*y
     @sync begin
@@ -1046,8 +1046,8 @@ function Base.At_mul_B!{T <: Float}(
 )
     # error checking
     p = size(x,2)
-    p <= length(xty) || throw(ArgumentError("Attempting to fill argument xty of length $(length(xty)) with $p elements!"))
-    x.geno.n == length(y)   || throw(ArgumentError("Argument y has $(length(y)) elements but should have $(x.geno.n) of them!"))
+    @assert p <= length(xty) "Attempting to fill argument xty of length $(length(xty)) with $p elements!"
+    @assert x.geno.n == length(y) "Argument y has $(length(y)) elements but should have $(x.geno.n) of them!"
 
     # loop over the desired number of predictors
     @inbounds for snp = 1:p
@@ -1058,7 +1058,7 @@ end
 
 
 # easy function wrapper
-At_mul_B!{T <: Float}(xty::DenseVector{T}, x::BEDFile{T}, y::DenseVector{T}) = At_mul_B!(xty, x, y, x.mask) 
+At_mul_B!{T <: Float}(xty::DenseVector{T}, x::BEDFile{T}, y::DenseVector{T}) = At_mul_B!(xty, x, y, x.mask)
 
 
 """

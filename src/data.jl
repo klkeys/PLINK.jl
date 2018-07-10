@@ -12,8 +12,8 @@ For example,
 would read the trio `mydata.bed`, `mydata.bim`, and `mydata.fam` in the current working directory.
 """
 function read_plink_data(
-    T      :: Type, 
-    xpath  :: String; 
+    T      :: Type,
+    xpath  :: String;
     pids   :: DenseVector{Int} = procs(),
     header :: Bool = false,
     delim  :: Char = ' '
@@ -28,16 +28,16 @@ function read_plink_data(
 
     # check that the FAM file has six columns
     p = size(Y,2)
-    p == 6 || throw(DimensionMismatch("FAM file does not have six columns, is it formatted correctly?"))
+    @assert p == 6 "FAM file does not have six columns, is it formatted correctly?"
 
     # we cannot know for certain that Y is loaded as floating point
     # to be safe, explicitly convert the phenotype column to the correct type
-    ytemp = convert(Vector{T}, Y[:,end]) 
+    ytemp = convert(Vector{T}, Y[:,end])
 
-    # in FAM file, the phenotype is the rightmost column 
+    # in FAM file, the phenotype is the rightmost column
     # initialize a SharedVector and fill it with the phenotype
-    y = SharedArray(T, (x.geno.n,), pids=pids)
-    copy!(y, ytemp) 
+    y = SharedArray{T}((x.geno.n,), pids=pids)
+    copy!(y, ytemp)
 
     return x, y
 end
@@ -54,9 +54,9 @@ By default, the response `y` is loaded from a delimited text file located at `yp
 Set `isbin=true` to load from a _binary_ file.
 """
 function read_plink_data(
-    T      :: Type, 
-    xpath  :: String, 
-    ypath  :: String; 
+    T      :: Type,
+    xpath  :: String,
+    ypath  :: String;
     pids   :: DenseVector{Int} = procs(),
     isbin  :: Bool = false,
     header :: Bool = false,
@@ -70,11 +70,11 @@ function read_plink_data(
     # binary files -> make SharedVector directly
     # delimited text -> must wrangle into SharedVector
     if isbin
-        y = SharedArray(abspath(ypath), T, (x.geno.n,), pids=pids)
+        y = SharedArray{T}(abspath(ypath), (x.geno.n,), pids=pids)
     else
         ytemp = readdlm(ypath, delim, header=header)
-        size(ytemp,2) == 1 || throw(DimensionMismatch("File at ypath must have exactly one column"))
-        y = SharedArray(T, (x.geno.n,), pids=pids)
+        @assert size(ytemp,2) == 1 "File at ypath must have exactly one column"
+        y = SharedArray{T}((x.geno.n,), pids=pids)
         copy!(y, ytemp)
     end
 
@@ -88,14 +88,14 @@ read_plink_data(xpath::String, ypath::String, pids::DenseVector{Int} = procs(), 
 """
     read_plink_data(xpath, covpath, ypath [,isbin=false, header=false, delim=' ']) -> x::BEDFile, y::SharedVector
 
-Read the trio of binary PLINK files (BED, BIM, FAM) based on the file path `xpath`, plus covariates from the file path `covpath`. 
+Read the trio of binary PLINK files (BED, BIM, FAM) based on the file path `xpath`, plus covariates from the file path `covpath`.
 By default, the response `y` is loaded from a delimited text file located at `ypath`.
 Set `isbin=true` to load from a _binary_ file.
 """
 function read_plink_data(
-    T         :: Type, 
-    xpath     :: String, 
-    covpath   :: String, 
+    T         :: Type,
+    xpath     :: String,
+    covpath   :: String,
     ypath     :: String;
     pids      :: DenseVector{Int} = procs(),
     covheader :: Bool = false,
@@ -112,11 +112,11 @@ function read_plink_data(
     # binary files -> make SharedVector directly
     # delimited text -> must wrangle into SharedVector
     if isbin
-        y = SharedArray(abspath(ypath), T, (x.geno.n,), pids=pids)
+        y = SharedArray{T}(abspath(ypath), (x.geno.n,), pids=pids)
     else
         ytemp = readdlm(ypath, ydelim, header=yheader)
-        size(ytemp,2) == 1 || throw(DimensionMismatch("File at ypath must have exactly one column"))
-        y = SharedArray(T, (x.geno.n,), pids=pids)
+        @assert size(ytemp,2) == 1 "File at ypath must have exactly one column"
+        y = SharedArray{T}((x.geno.n,), pids=pids)
         copy!(y, ytemp)
     end
 

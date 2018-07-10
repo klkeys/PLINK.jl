@@ -1,34 +1,34 @@
 function decomp_genocol!{T <: Float}(
-    Y     :: DenseVecOrMat{T}, 
+    Y     :: DenseVecOrMat{T},
     x     :: BEDFile{T},
     col   :: Int,
-    snp   :: Int, 
-    m     :: T, 
+    snp   :: Int,
+    m     :: T,
     d     :: T;
     quiet :: Bool = true
 )
     @inbounds for case = 1:x.geno.n
         t = x.geno[case,snp]
-        Y[case,col] = t == ONE8 ? zero(T) : (int2geno(x,t) - m)*d 
+        Y[case,col] = t == ONE8 ? zero(T) : (int2geno(x,t) - m)*d
         quiet || println("Y[$case,$col] = ", Y[case,col])
     end
     return nothing
 end
 
 function decomp_genocol!{T <: Float}(
-    Y      :: DenseVecOrMat{T}, 
+    Y      :: DenseVecOrMat{T},
     x      :: BEDFile{T},
     mask_n :: DenseVector{Int},
     col    :: Int,
-    snp    :: Int, 
-    m      :: T, 
+    snp    :: Int,
+    m      :: T,
     d      :: T;
     quiet  :: Bool = true
 )
     @inbounds for case = 1:x.geno.n
         if mask_n[case] == 1
             t = x[case,snp]
-            Y[case,col] = t == ONE8 ? zero(T) : (int2geno(x,t) - m)*d 
+            Y[case,col] = t == ONE8 ? zero(T) : (int2geno(x,t) - m)*d
             quiet || println("Y[$case,$col] = ", Y[case,col])
         else
             Y[case,col] = zero(T)
@@ -38,11 +38,11 @@ function decomp_genocol!{T <: Float}(
 end
 
 function decomp_covarcol!{T <: Float}(
-    Y     :: DenseVecOrMat{T}, 
+    Y     :: DenseVecOrMat{T},
     x     :: BEDFile{T},
     col   :: Int,
-    covar :: Int, 
-    m     :: T, 
+    covar :: Int,
+    m     :: T,
     d     :: T;
     quiet :: Bool = true
 )
@@ -53,12 +53,12 @@ function decomp_covarcol!{T <: Float}(
 end
 
 function decomp_covarcol!{T <: Float}(
-    Y      :: DenseVecOrMat{T}, 
+    Y      :: DenseVecOrMat{T},
     x      :: BEDFile{T},
     mask_n :: DenseVector{Int},
     col    :: Int,
-    covar  :: Int, 
-    m      :: T, 
+    covar  :: Int,
+    m      :: T,
     d      :: T;
     quiet  :: Bool = true
 )
@@ -92,15 +92,15 @@ function decompress_genotypes!{T <: Float}(
     xn,xp = size(x)
 
     # ensure dimension compatibility
-    n == xn || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
-    p <= xp || throw(DimensionMismatch("Y has more columns than x"))
+    @assert n == xn "column of Y is not of same length as column of uncompressed x"
+    @assert p <= xp "Y has more columns than x"
 
     ## TODO: parallelize this for SharedArrays
     @inbounds for j = 1:xp
         m = x.means[j]
         s = x.precs[j]
         if j <= x.geno.p
-            decomp_genocol!(Y, x, j, j, m, s, quiet=quiet) 
+            decomp_genocol!(Y, x, j, j, m, s, quiet=quiet)
         else
             decomp_covarcol!(Y, x, j, j, m, s, quiet=quiet)
         end
@@ -128,9 +128,9 @@ function decompress_genotypes!{T <: Float}(
     xn, xp = size(x)
 
     # ensure dimension compatibility
-    n == xn        || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
-    p <= xp        || throw(DimensionMismatch("Y has more columns than x"))
-    sum(idx) <= xp || throw(DimensionMismatch("Vector 'idx' indexes more columns than are available in Y"))
+    @assert n == xn "column of Y is not of same length as column of uncompressed x"
+    @assert p <= xp "Y has more columns than x"
+    @assert sum(idx) <= xp "Vector 'idx' indexes more columns than are available in Y"
 
     # counter to ensure that we do not attempt to overfill Y
     col = 0
@@ -145,7 +145,7 @@ function decompress_genotypes!{T <: Float}(
             col += 1
             quiet || println("filling current column $current_col with snp $snp")
 
-            # extract column mean, precision 
+            # extract column mean, precision
             m = x.means[snp]
             s = x.precs[snp]
 
@@ -177,9 +177,9 @@ function decompress_genotypes!{T <: Float}(
     xn,xp = size(x)
 
     # ensure dimension compatibility
-    n == xn          || throw(DimensionMismatch("column of Y is not of same length as column of uncompressed x"))
-    p <= xp          || throw(DimensionMismatch("Y has more columns than x"))
-    length(idx) <= p || throw(DimensionMismatch("Vector 'idx' indexes more columns than are available in Y"))
+    @assert n == xn "column of Y is not of same length as column of uncompressed x"
+    @assert p <= xp "Y has more columns than x"
+    @assert length(idx) <= p "Vector 'idx' indexes more columns than are available in Y"
 
     # counter to ensure that we do not attempt to overfill Y
     col = 0
@@ -208,7 +208,7 @@ end
 
 
 """
-    decompress_genotypes!(Y, x, idx, mask_n [,pids=procs(), quiet=true]) 
+    decompress_genotypes!(Y, x, idx, mask_n [,pids=procs(), quiet=true])
 
 If called with a vector `mask_n` of `0`s and `1`s, then `decompress_genotypes!()` will decompress the columns of `x` indexed by `idx` into `Y` while masking the rows indexed by `mask_n`.
 """
@@ -226,10 +226,10 @@ function decompress_genotypes!{T <: Float}(
     xn,xp = size(x,2)
 
     # ensure dimension compatibility
-    n <= xn             || throw(DimensionMismatch("column dimension of of Y exceeds column dimension of uncompressed x"))
-    n == length(mask_n) || throw(DimensionMismatch("bitmask mask_n indexes different number of columns than column dimension of Y"))
-    p <= xp             || throw(DimensionMismatch("Y has more columns than x"))
-    sum(idx) <= xp      || throw(DimensionMismatch("Vector 'idx' indexes more columns than are available in Y"))
+    @assert n <= xn "column dimension of of Y exceeds column dimension of uncompressed x"
+    @assert n == length(mask_n) "bitmask mask_n indexes different number of columns than column dimension of Y"
+    @assert p <= xp "Y has more columns than x"
+    @assert sum(idx) <= xp "Vector 'idx' indexes more columns than are available in Y"
 
     # counter to ensure that we do not attempt to overfill Y
     col = 0
@@ -243,7 +243,7 @@ function decompress_genotypes!{T <: Float}(
             col += 1
             quiet || println("filling current column $col with snp $snp")
 
-            # extract column mean, precision 
+            # extract column mean, precision
             m = x.means[snp]
             s = x.precs[snp]
             if snp <= x.geno.p
@@ -285,7 +285,7 @@ function decompress_genotypes!{T <: Float}(
 )
     m = x.means[col]
     s = x.precs[col]
-    if col <= x.geno.p 
+    if col <= x.geno.p
         decomp_genocol!(y, x, 1, col, m, s, quiet=quiet)
     else
         decomp_covarcol!(y, x, 1, col, m, s, quiet=quiet)

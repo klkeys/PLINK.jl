@@ -2,16 +2,16 @@
 export PlinkGPUVariables
 
 type PlinkGPUVariables{T <: Float, V <: cl.Buffer}
-    df_buff     :: V 
+    df_buff     :: V
     x_buff      :: cl.Buffer{Int8}
-    y_buff      :: V 
+    y_buff      :: V
     mask_buff   :: cl.Buffer{Int}
     device      :: cl.Device
     ctx         :: cl.Context
     queue       :: cl.CmdQueue
-    m_buff      :: V 
-    p_buff      :: V 
-    red_buff    :: V 
+    m_buff      :: V
+    p_buff      :: V
+    red_buff    :: V
     xtyk        :: cl.Kernel
     rxtyk       :: cl.Kernel
     reset_x     :: cl.Kernel
@@ -32,16 +32,16 @@ type PlinkGPUVariables{T <: Float, V <: cl.Buffer}
 end
 
 function PlinkGPUVariables{T <: Float}(
-    df_buff     :: cl.Buffer{T}, 
+    df_buff     :: cl.Buffer{T},
     x_buff      :: cl.Buffer{Int8},
-    y_buff      :: cl.Buffer{T}, 
+    y_buff      :: cl.Buffer{T},
     mask_buff   :: cl.Buffer{Int},
     device      :: cl.Device,
     ctx         :: cl.Context,
     queue       :: cl.CmdQueue,
-    m_buff      :: cl.Buffer{T}, 
-    p_buff      :: cl.Buffer{T}, 
-    red_buff    :: cl.Buffer{T}, 
+    m_buff      :: cl.Buffer{T},
+    p_buff      :: cl.Buffer{T},
+    red_buff    :: cl.Buffer{T},
     xtyk        :: cl.Kernel,
     rxtyk       :: cl.Kernel,
     reset_x     :: cl.Kernel,
@@ -92,7 +92,7 @@ function PlinkGPUVariables{T <: Float}(
     reset_x     = cl.Kernel(program, "reset_x")
     x_buff      = cl.Buffer(Int8, ctx, (:r,  :copy), hostbuf = sdata(x.geno.x)) :: cl.Buffer{Int8}
     y_buff      = cl.Buffer(T,    ctx, (:r,  :copy), hostbuf = sdata(y)) :: cl.Buffer{T}
-    m_buff      = cl.Buffer(T,    ctx, (:r,  :copy), hostbuf = sdata(x.means)) :: cl.Buffer{T} 
+    m_buff      = cl.Buffer(T,    ctx, (:r,  :copy), hostbuf = sdata(x.means)) :: cl.Buffer{T}
     p_buff      = cl.Buffer(T,    ctx, (:r,  :copy), hostbuf = sdata(x.precs)) :: cl.Buffer{T}
     df_buff     = cl.Buffer(T,    ctx, (:rw, :copy), hostbuf = sdata(z)) :: cl.Buffer{T}
     red_buff    = cl.Buffer(T,    ctx, (:rw), p*y_chunks) :: cl.Buffer{T}
@@ -105,13 +105,13 @@ end
 """
     df_x2!(snp, df, x, r, mask_n)
 
-This subroutine calculates the gradient for one nongenetic covariate. 
+This subroutine calculates the gradient for one nongenetic covariate.
 
 Arguments:
 
 - `snp` is the SNP to use in calculations.
 - `df` is the gradient vector.
-- `x` is the `BEDFile` object with nongenetic covariates 
+- `x` is the `BEDFile` object with nongenetic covariates
 - `r` is the vector of residuals.
 - `mask_n` is the bitmask on the data.
 """
@@ -245,7 +245,7 @@ function Base.At_mul_B{T <: Float}(
     mask_n :: Vector{Int} = ones(Int, size(y)),
     pids   :: Vector{Int} = procs(x),
 )
-    xty = SharedArray(T, (size(x,2),), pids=pids) :: SharedVector{T}
-    At_mul_B!(xty, x, y, v) 
+    xty = SharedArray{T}((size(x,2),), pids=pids) :: SharedVector{T}
+    At_mul_B!(xty, x, y, v)
     return xty
 end

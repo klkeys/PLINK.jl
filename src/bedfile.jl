@@ -10,7 +10,7 @@ BEDFile{T <: Float}(geno::GenoMatrix, covar::CovariateMatrix, means::SharedVecto
 
 # subroutines for AbstractMatrix type
 Base.size(x::BEDFile) = (x.geno.n, x.geno.p + x.covar.p)
-Base.size(x::BEDFile, d::Int) = d == 1? x.geno.n : size(x.geno, 2) + size(x.covar, 2) 
+Base.size(x::BEDFile, d::Int) = d == 1? x.geno.n : size(x.geno, 2) + size(x.covar, 2)
 
 Base.eltype(x::BEDFile) = eltype(x.covar)
 
@@ -19,9 +19,9 @@ Base.ndims(x::BEDFile) = 2
 Base.copy(x::BEDFile) = BEDFile(x.geno, x.covar, x.means, x.precs, x.mask)
 
 function ==(x::BEDFile, y::BEDFile)
-     x.geno == y.geno  && 
-    x.covar == y.covar && 
-    x.means == y.means && 
+     x.geno == y.geno  &&
+    x.covar == y.covar &&
+    x.means == y.means &&
     x.precs == y.precs &&
     x.ids   == y.ids
 end
@@ -41,7 +41,7 @@ end
 # matrix indexing
 function getindex{T <: Float}(
     x   :: BEDFile{T},
-    row :: Int, 
+    row :: Int,
     col :: Int
 )
     col > x.geno.p && return getindex(x.covar, row, col-x.geno.p)
@@ -51,15 +51,15 @@ end
 # matrix manipulations
 # what to do about transpose in CovariateMatrix?
 function setindex!{T <: Float}(x::BEDFile{T}, v, i::Int)
-    i <= x.p && throw(ArgumentError("Cannot index into genotype array of BEDFile object since it is read-only"))
+    @assert i > x.p "Cannot index changes into genotype array of BEDFile object since it is read-only"
     setindex!(x.x, v, i-x.p)
 end
 
 typeof(x::BEDFile) = "$(x.n)x$(size(x,2)) BEDFile{$(eltype(x.x))} with $(x.p2) nongenetic covariates"
-summary(x::BEDFile) = typeof(x) 
+summary(x::BEDFile) = typeof(x)
 
-# get names of all predictors 
-prednames(x::BEDFile) = [x.geno.snpids; x.covar.h] 
+# get names of all predictors
+prednames(x::BEDFile) = [x.geno.snpids; x.covar.h]
 
 
 ### BEDFile constructors
@@ -89,15 +89,15 @@ end
 # set default type for previous constructor to Float64
 function BEDFile(
     filename   :: String,
-    tfilename  :: String, 
-    n          :: Int, 
-    p          :: Int, 
-    blocksize  :: Int, 
-    tblocksize :: Int, 
+    tfilename  :: String,
+    n          :: Int,
+    p          :: Int,
+    blocksize  :: Int,
+    tblocksize :: Int,
     x2filename :: String,
     mfilename  :: String,
     pfilename  :: String;
-    pids       :: Vector{Int} = procs(), 
+    pids       :: Vector{Int} = procs(),
     header     :: Bool = false
 )
     BEDFile(Float64, filename, tfilename, n, p, blocksize, tblocksize, x2filename, mfilename, pfilename, pids=pids, header=header) :: BEDFile{Float64}
@@ -125,88 +125,42 @@ end
 function BEDFile(
     filename   :: String,
     tfilename  :: String,
-    n          :: Int, 
-    p          :: Int, 
+    n          :: Int,
+    p          :: Int,
     x2filename :: String,
     mfilename  :: String,
     pfilename  :: String;
-    pids       :: Vector{Int} = procs(), 
+    pids       :: Vector{Int} = procs(),
     header     :: Bool = false
 )
     BEDFile(Float64, filename, tfilename, n, p, xtfilename, mfilename, pfilename, pids=pids, header=header) :: BEDFile{Float64}
 end
 
 
-### 22 Sep 2016: conflict with another constructor that uses just genotype matrix + covariates
-### this one uses both genotype matrix and its transpose
-## constructor when only genotype data are available
-## adds single covariate of zeroes and computes means, precisions
-#function BEDFile(
-#    T         :: Type, 
-#    filename  :: String, 
-#    tfilename :: String; 
-#    pids      :: Vector{Int} = procs()
-#)
-#
-#    # can easily create GenoMatrix
-#    x = GenoMatrix(filename, tfilename, pids=pids)
-#
-#    # now make dummy CovariateMatrix 
-#    x2  = SharedArray(T, x.n, 1, init = S -> localindexes(S) = zero(T), pids=pids) :: SharedMatrix{T}
-#    x2t = SharedArray(T, 1, x.n, init = S -> localindexes(S) = zero(T), pids=pids) :: SharedMatrix{T}
-#    y   = CovariateMatrix(x2,1,x2t)
-#
-#    # make dummy means, precisions
-#    # default yields no standardization (zero mean, identity precision)
-#    p = x.p + y.p
-#    m = SharedArray(T, (p,), init = S -> localindexes(S) = zero(T), pids=pids) :: SharedVector{T} 
-#    d = SharedArray(T, (p,), init = S -> localindexes(S) = one(T),  pids=pids) :: SharedVector{T}
-#
-#    # construct BEDFile
-#    z = BEDFile{T}(x,y,m,d)
-#
-#    # compute means, precisions
-#    # since we have a single covariate of all `a`, set the final mean/prec to 0/1
-#    mean!(z); z.means[end] = zero(T)
-#    prec!(z); z.precs[end] = one(T)
-#
-#    return z :: BEDFile{T} 
-#end
-#
-## set default type for previous constructor to Float64
-#function BEDFile(
-#    filename  :: String,
-#    tfilename :: String; 
-#    pids      :: Vector{Int} = procs()
-#)
-#    BEDFile(Float64, filename, tfilename, pids=pids) :: BEDFile{Float64}
-#end
-
-
 # constructor for when genotype, covariate information are available
 # computes means, precisions
 function BEDFile(
-    T          :: Type, 
-    filename   :: String, 
-    tfilename  :: String, 
-    x2filename :: String; 
+    T          :: Type,
+    filename   :: String,
+    tfilename  :: String,
+    x2filename :: String;
     pids       :: Vector{Int} = procs(),
-    header     :: Bool = false, 
+    header     :: Bool = false,
 )
     # making matrices is easy
     x = GenoMatrix(filename, tfilename, pids=pids)
     y = CovariateMatrix(T, x2filename, pids=pids, header=header)
 
     # but ensure same number of rows!
-    x.n == size(y,1) || throw(DimensionMismatch("Nongenetic covariates and genotype matrix must have equal number of rows"))
+    @assert x.n == size(y,1) "Nongenetic covariates and genotype matrix must have equal number of rows"
 
     # make dummy means, precisions
     # default yields no standardization (zero mean, identity precision)
-    m = SharedArray{T}((x.p + y.p,), init = S -> localindexes(S) = zero(T), pids=pids) :: SharedVector{T} 
+    m = SharedArray{T}((x.p + y.p,), init = S -> localindexes(S) = zero(T), pids=pids) :: SharedVector{T}
     d = SharedArray{T}((x.p + y.p,), init = S -> localindexes(S) = one(T),  pids=pids) :: SharedVector{T}
 
     # construct BEDFile
-    z = BEDFile{T}(x,y,m,d,ones(Int,x.n)) 
+    z = BEDFile{T}(x,y,m,d,ones(Int,x.n))
 
     # compute means, precisions
     mean!(z);
@@ -227,10 +181,10 @@ end
 
 # set default type for previous constructor to Float64
 function BEDFile(
-    filename   :: String, 
-    tfilename  :: String, 
-    x2filename :: String; 
-    header     :: Bool = false, 
+    filename   :: String,
+    tfilename  :: String,
+    x2filename :: String;
+    header     :: Bool = false,
     pids       :: Vector{Int} = procs()
 )
     BEDFile(Float64, filename, tfilename, x2filename, header=header, pids=pids) :: BEDFile{Float64}
@@ -238,39 +192,39 @@ end
 
 # constructor to load all data from file
 function BEDFile(
-    T          :: Type, 
-    filename   :: String, 
-    tfilename  :: String, 
+    T          :: Type,
+    filename   :: String,
+    tfilename  :: String,
     x2filename :: String,
     mfilename  :: String,
-    pfilename  :: String; 
+    pfilename  :: String;
     pids       :: Vector{Int} = procs(),
-    header     :: Bool = false, 
+    header     :: Bool = false,
 )
     # making matrices is easy
     x = GenoMatrix(filename, tfilename, pids=pids)
     y = CovariateMatrix(T, x2filename, pids=pids, header=header)
 
     # but ensure same number of rows!
-    x.n == size(y,1) || throw(DimensionMismatch("Nongenetic covariates and genotype matrix must have equal number of rows"))
+    @assert x.n == size(y,1) "Nongenetic covariates and genotype matrix must have equal number of rows"
 
     # load means, precisions
     p = x.p + y.p
     m = SharedArray{T}(abspath(mfilename), (p,), pids=pids) :: SharedVector{T}
     d = SharedArray{T}(abspath(pfilename), (p,), pids=pids) :: SharedVector{T}
 
-    return BEDFile{T}(x,y,m,d,ones(Int,x.n)) 
+    return BEDFile{T}(x,y,m,d,ones(Int,x.n))
 end
 
 # set default type for previous constructor to Float64
 function BEDFile(
-    filename   :: String, 
-    tfilename  :: String, 
+    filename   :: String,
+    tfilename  :: String,
     x2filename :: String,
     mfilename  :: String,
-    pfilename  :: String; 
+    pfilename  :: String;
     pids       :: Vector{Int} = procs(),
-    header     :: Bool = false, 
+    header     :: Bool = false,
 )
     BEDFile(Float64, filename, tfilename, x2filename, mfilename, pfilename, header=header, pids=pids) :: BEDFile{Float64}
 end
@@ -294,12 +248,12 @@ function BEDFile(
 
     # use Julia temporary directory for transpose
     # here we call our PLINK utility to transpose the file
-    tmppath = tempdir() * "/tbed_$(myid()).bed" 
+    tmppath = tempdir() * "/tbed_$(myid()).bed"
     vernum  = "v$(VERSION.major).$(VERSION.minor)"
     plinkpath = expanduser("~/.julia/$vernum/PLINK/utils/./plink_data")
     run(`$plinkpath $filename $p $n --transpose $tmppath`)
 
-    # create a BEDFile object 
+    # create a BEDFile object
     x = BEDFile(T, filename, tmppath, x2filename, pids=pids, header=header) :: BEDFile{T}
 
     # calculate means and precisions
@@ -323,7 +277,7 @@ function BEDFile(
 end
 
 # default type for previous constructor is Float64
-BEDFile(filename::String, x2filename::String; pids::Vector{Int} = procs(), header::Bool = false) = BEDFile(Float64, filename, x2filename, pids=pids, header=header) :: BEDFile{Float64} 
+BEDFile(filename::String, x2filename::String; pids::Vector{Int} = procs(), header::Bool = false) = BEDFile(Float64, filename, x2filename, pids=pids, header=header) :: BEDFile{Float64}
 
 # another ambitious construtor that only uses the location of the BED file
 # unlike previous constructors, the default covariate is a vector of ones
@@ -334,12 +288,12 @@ function BEDFile(
     pids     :: Vector{Int} = procs()
 )
     # make a temporary covariate file
-    tmpcovar = tempdir() * "/x_$(myid()).txt" 
+    tmpcovar = tempdir() * "/x_$(myid()).txt"
     famfile  = filename[1:(endof(filename)-3)] * "fam"
     n        = countlines(famfile)
     writedlm(tmpcovar, ones(n))
 
-    # create a BEDFile object 
+    # create a BEDFile object
     x = BEDFile(T, filename, tmpcovar, pids=pids, header=false) :: BEDFile{T}
 
     # delete temporary files before returning
@@ -349,7 +303,7 @@ function BEDFile(
 end
 
 # default type for previous constructor is Float64
-BEDFile(filename::String; pids::Vector{Int} = procs()) = BEDFile(Float64, filename, pids=pids) :: BEDFile{Float64} 
+BEDFile(filename::String; pids::Vector{Int} = procs()) = BEDFile(Float64, filename, pids=pids) :: BEDFile{Float64}
 
 function display(x::BEDFile)
     println("A BEDFile object with the following features:")

@@ -4,7 +4,7 @@ using StatsFuns
 ### idea from Julia Hoffimann Mendes to conditionally load OpenCL module
 # if no OpenCL library is available, then issue a warning
 # set "cl" variable to Void,
-# then conditionally load GPU code based on value of "cl" 
+# then conditionally load GPU code based on value of "cl"
 try
     using OpenCL
 catch e
@@ -39,7 +39,7 @@ export maf
 export getindex
 export compress
 export read_plink_data
-export prednames 
+export prednames
 
 # constants used for decompression purposes
 const ZERO8  = convert(Int8,0)
@@ -77,7 +77,7 @@ and so the first four genotypes are read as follows:
     01101100
     HGFEDCBA
 
-          AB   00  -> homozygote (first)        -> 0 
+          AB   00  -> homozygote (first)        -> 0
         CD     11  -> other homozygote (second) -> 2
       EF       01  -> heterozygote (third)      -> 1
     GH         10  -> missing genotype (fourth) -> NaN
@@ -93,7 +93,7 @@ Thus, the map in PLINK.jl is slightly different:
 - 00 -> 0 -> 0.0
 - 11 -> 3 -> 2.0
 - **10 -> 2 -> 1.0**
-- **01 -> 1 -> NaN** 
+- **01 -> 1 -> NaN**
 """
 const genofloat = [0.0, NaN, 1.0, 2.0]
 const genoint   = [0 -99 1 2]

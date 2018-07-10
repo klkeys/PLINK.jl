@@ -1,9 +1,9 @@
 # container for nongenetic covariates
 immutable CovariateMatrix{T <: Float} <: AbstractArray{T, 2}
-    x  :: SharedMatrix{T} 
+    x  :: SharedMatrix{T}
     p  :: Int
-    xt :: SharedMatrix{T} 
-    h  :: Vector{String} # header 
+    xt :: SharedMatrix{T}
+    h  :: Vector{String} # header
 
     #CovariateMatrix(x::SharedMatrix{T}, p::Int, xt::SharedMatrix{T}, h::Vector{String}) = new(x,p,xt,h)
     CovariateMatrix{T}(x, p, xt, h) where {T <: Float} = new{T}(x,p,xt,h)
@@ -20,7 +20,7 @@ end
 #end
 
 function CovariateMatrix(
-    T        :: Type, 
+    T        :: Type,
     filename :: String;
     pids     :: Vector{Int} = procs(),
     header   :: Bool = false
@@ -67,7 +67,7 @@ Base.ndims(x::CovariateMatrix) = ndims(x.x)
 
 Base.endof(x::CovariateMatrix) = length(x.x)
 
-Base.eltype(x::CovariateMatrix) = eltype(x.x) 
+Base.eltype(x::CovariateMatrix) = eltype(x.x)
 
 Base.IndexStyle(::Type{CovariateMatrix}) = Base.IndexLinear()
 
